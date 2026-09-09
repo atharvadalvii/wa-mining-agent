@@ -1,0 +1,34 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "geoagent"
+version = "0.1.0"
+description = "A CLI geospatial AI agent using OSMnx/GeoPandas tools with OpenAI tool calling"
+requires-python = ">=3.10"
+dependencies = [
+    "openai>=1.40",
+    "osmnx>=2.0",
+    "geopandas",
+    "networkx",
+    "python-dotenv",
+    "scikit-learn",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+]
+
+[project.scripts]
+geoagent = "geoagent.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+markers = [
+    "integration: hits real OSM/Overpass network services, requires network access",
+]
+addopts = "-m 'not integration'"
