@@ -13,6 +13,7 @@ from geoagent.agent.conversation import Conversation
 from geoagent.agent.loop import run_turn
 from geoagent.agent.prompts import SYSTEM_PROMPT
 from geoagent.config import configure_osmnx, load_settings
+from geoagent.geospatial.mapping import configure_maps_dir
 
 import geoagent.tools.routing  # noqa: F401  (import for tool-registration side effects)
 
@@ -50,6 +51,7 @@ def main() -> None:
         overpass_url=settings.overpass_url,
         overpass_rate_limit=settings.overpass_rate_limit,
     )
+    configure_maps_dir(settings.maps_dir)
 
     from openai import OpenAI
 

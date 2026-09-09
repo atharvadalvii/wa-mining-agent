@@ -14,6 +14,7 @@ class Settings:
     openai_api_key: str
     openai_model: str
     cache_dir: Path
+    maps_dir: Path
     max_agent_turns: int
     overpass_url: str | None
     overpass_rate_limit: bool
@@ -30,6 +31,7 @@ def load_settings() -> Settings:
         openai_api_key=api_key,
         openai_model=os.environ.get("GEOAGENT_MODEL", "gpt-4o-mini"),
         cache_dir=Path(os.environ.get("GEOAGENT_CACHE_DIR", Path.cwd() / ".cache" / "osmnx")),
+        maps_dir=Path(os.environ.get("GEOAGENT_MAPS_DIR", Path.cwd() / "maps")),
         max_agent_turns=int(os.environ.get("GEOAGENT_MAX_TURNS", "8")),
         # Left unset by default so OSMnx's own default endpoint and rate-limit
         # behavior (which respects the public Overpass API's usage policy) apply.

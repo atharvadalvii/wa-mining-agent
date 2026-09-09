@@ -46,6 +46,17 @@ def compute_isochrone(
     area_km2 = hull.area / 1_000_000.0
     approx_radius_m = (hull.area / 3.14159265) ** 0.5
 
+    # Unprojected hull (lon/lat, as OSMnx stores node x/y) for map rendering;
+    # the projected hull above is only for the accurate area_km2 calculation.
+    # A tiny/degenerate reachable set can produce a Point or LineString instead
+    # of a Polygon, which has no `.exterior` — leave hull_coords empty then.
+    hull_lonlat = points_gdf.union_all().convex_hull
+    hull_coords = (
+        [(lat, lon) for lon, lat in hull_lonlat.exterior.coords]
+        if hull_lonlat.geom_type == "Polygon"
+        else []
+    )
+
     return IsochroneResult(
         center_label=c_label,
         minutes=minutes,
@@ -53,4 +64,6 @@ def compute_isochrone(
         n_reachable_nodes=n_reachable,
         area_km2=area_km2,
         approx_radius_m=approx_radius_m,
+        center_point=(c_lat, c_lon),
+        hull_coords=hull_coords,
     )

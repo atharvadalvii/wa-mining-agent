@@ -3,9 +3,23 @@
 from __future__ import annotations
 
 from geoagent.geospatial.isochrone import compute_isochrone
+from geoagent.geospatial.mapping import save_isochrone_map, save_route_map
 from geoagent.geospatial.network import get_network_summary
 from geoagent.geospatial.routing import compute_shortest_route
 from geoagent.tools.registry import ToolSpec, register
+
+
+def _with_map_export(text: str, save_map) -> str:
+    """Appends the saved map's file path to a tool result, or a note if export failed.
+
+    Map export is a nice-to-have alongside the actual routing/isochrone data, so a
+    failure here (e.g. an unwritable maps directory) must not lose the real result.
+    """
+    try:
+        map_path = save_map()
+    except Exception as exc:
+        return f"{text} (map export failed: {exc})"
+    return f"{text} Map saved to {map_path}."
 
 
 def handle_get_street_network(
@@ -30,7 +44,7 @@ def handle_shortest_route(
     result = compute_shortest_route(
         origin=origin, destination=destination, network_type=network_type, weight=weight
     )
-    return result.to_tool_text()
+    return _with_map_export(result.to_tool_text(), lambda: save_route_map(result))
 
 
 def handle_isochrone(
@@ -39,7 +53,7 @@ def handle_isochrone(
     network_type: str = "walk",
 ) -> str:
     result = compute_isochrone(center=center, minutes=minutes, network_type=network_type)
-    return result.to_tool_text()
+    return _with_map_export(result.to_tool_text(), lambda: save_isochrone_map(result))
 
 
 register(

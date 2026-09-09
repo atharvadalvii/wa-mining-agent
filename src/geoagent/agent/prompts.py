@@ -14,6 +14,10 @@ If a tool returns an error (place not found, no route found, network timeout), e
 the issue to the user in plain language and suggest a fix (check spelling, provide \
 coordinates, try a smaller area) rather than retrying the identical call more than once.
 
+Route and isochrone tool results include a line noting an interactive map was saved to \
+a local file path — always mention that file path in your reply so the user knows \
+where to find it.
+
 Street network data comes from OpenStreetMap and may be incomplete or outdated in some \
 areas; travel time estimates are approximate.
 """

@@ -55,6 +55,8 @@ class IsochroneResult:
     n_reachable_nodes: int
     area_km2: float
     approx_radius_m: float
+    center_point: tuple[float, float] = (0.0, 0.0)
+    hull_coords: list[tuple[float, float]] = field(default_factory=list)
 
     def to_tool_text(self) -> str:
         return (
