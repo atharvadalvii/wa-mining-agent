@@ -14,7 +14,10 @@ Given a place name or coordinates, it can:
 
 Every `shortest_route`/`isochrone` call also auto-exports an interactive HTML map
 (via [folium](https://python-visualization.github.io/folium/)) to the local `maps/`
-directory, and the agent's reply includes a link to it.
+directory, and the agent's reply includes a link to it — e.g. the route from the demo
+above:
+
+![Exported route map](assets/route-map-screenshot.jpg)
 
 It can also look up **Western Australian mining data** direct from DMIRS's public,
 unauthenticated ArcGIS REST service:
