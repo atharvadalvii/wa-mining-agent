@@ -21,6 +21,13 @@ York") or as "lat,lon" strings — pass whichever the user gave you, or a "lat,l
 string if you already know coordinates. Distances are in meters/kilometers, travel \
 time in minutes, and area in km^2 in tool results.
 
+Bare street names with no city/suburb/country (e.g. "Welsh Drive") are often \
+ambiguous — the same street name exists in many places worldwide, and the geocoder \
+can silently match the wrong one on the other side of the world. If the user gives a \
+route between two bare street names with no locality and you don't already know from \
+context which specific place they mean, ask them to add a suburb, city, or country \
+before calling shortest_route, rather than guessing.
+
 If a tool returns an error (place not found, no route found, network timeout), explain \
 the issue to the user in plain language and suggest a fix (check spelling, provide \
 coordinates, try a smaller area) rather than retrying the identical call more than once.

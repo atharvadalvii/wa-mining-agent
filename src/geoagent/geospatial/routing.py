@@ -8,10 +8,20 @@ from geoagent.geospatial.network import default_cache, haversine_m
 
 _RADIUS_BUFFER_M = 500.0
 _RADIUS_SAFETY_FACTOR = 0.75
+# Above this span, refuse rather than attempt an OSMnx fetch: the fetch radius
+# scales with the origin-destination distance, so an unbounded span here means an
+# unbounded (and potentially enormous) map data fetch. This is also usually a sign
+# of a geocoding mismatch (e.g. a bare street name with no city resolving to two
+# unrelated places worldwide) rather than a genuine very-long-distance route.
+_MAX_SPAN_M = 150_000.0
 
 
 class RouteNotFoundError(Exception):
     """Raised when no path exists between the origin and destination on the network."""
+
+
+class RouteTooFarError(Exception):
+    """Raised when origin/destination are farther apart than this tool supports."""
 
 
 def path_to_route_result(
@@ -62,6 +72,16 @@ def compute_shortest_route(
     mid_lat = (o_lat + d_lat) / 2
     mid_lon = (o_lon + d_lon) / 2
     span_m = haversine_m(o_lat, o_lon, d_lat, d_lon)
+
+    if span_m > _MAX_SPAN_M:
+        raise RouteTooFarError(
+            f"'{o_label}' and '{d_label}' resolved to locations {span_m / 1000:.0f} km "
+            f"apart, farther than this tool supports (max {_MAX_SPAN_M / 1000:.0f} km). "
+            "If these should be nearby, the geocoder likely matched an unrelated place "
+            "with a similar name — try adding a suburb, city, or country to each, e.g. "
+            "'Welsh Drive, Bayswater, WA' instead of just 'Welsh Drive'."
+        )
+
     radius_m = max(span_m * _RADIUS_SAFETY_FACTOR + _RADIUS_BUFFER_M, _RADIUS_BUFFER_M)
 
     graph = default_cache.get_for_point(mid_lat, mid_lon, radius_m, network_type)

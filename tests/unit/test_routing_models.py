@@ -2,7 +2,7 @@ import networkx as nx
 import pytest
 
 from geoagent.geospatial.models import IsochroneResult, NetworkSummary, RouteResult
-from geoagent.geospatial.routing import path_to_route_result
+from geoagent.geospatial.routing import RouteTooFarError, compute_shortest_route, path_to_route_result
 
 
 @pytest.fixture
@@ -77,3 +77,13 @@ def test_isochrone_result_to_tool_text():
     assert "Home" in text
     assert "15" in text
     assert "42" in text
+
+
+def test_compute_shortest_route_rejects_points_too_far_apart():
+    # "lat,lon" strings skip geocoding entirely, so this raises before any
+    # network call — regression test for a real bug: two bare street names with
+    # no city context geocoded to opposite sides of the planet, and the missing
+    # span cap meant the tool tried to fetch a ~10,000km-radius street network
+    # instead of failing fast.
+    with pytest.raises(RouteTooFarError):
+        compute_shortest_route("39.6383482,-119.8542626", "-23.3648736,119.7306373")
