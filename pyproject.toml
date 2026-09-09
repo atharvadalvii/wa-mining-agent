@@ -32,6 +32,9 @@ dashboard = [
     "streamlit",
     "streamlit-folium",
 ]
+gradio = [
+    "gradio",
+]
 
 [project.scripts]
 geoagent = "geoagent.cli:main"

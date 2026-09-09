@@ -46,7 +46,7 @@ see both real, live tool calls and their raw results:
 flowchart LR
     U1["CLI user<br/>(rich REPL)"] -->|natural language| L["Agent Loop<br/>(OpenAI tool calling)"]
     U2["HTTP client<br/>(FastAPI /query)"] -->|natural language| L
-    U3["Streamlit dashboard<br/>(chat + live map)"] -->|natural language| L
+    U3["Dashboard<br/>(Streamlit or Gradio, chat + live map)"] -->|natural language| L
     L -->|reply + geojson / map link| U1
     L -->|reply + geojson| U2
     L -->|reply + geojson| U3
@@ -78,9 +78,9 @@ model-readable text summaries — full data (route coordinates, isochrone polygo
 stays out of the LLM's context but is retained for map export and, via
 `tools/geo_context.py`'s context-local collector, for the API's and dashboard's
 GeoJSON. `agent/` only talks to the tool registry's generic interface, so it has no
-dependency on OSMnx, GeoPandas, or DMIRS at all — `cli.py`, `api.py`, and
-`dashboard.py` are three thin, swappable front ends over the same `agent/`/`tools/`
-core.
+dependency on OSMnx, GeoPandas, or DMIRS at all — `cli.py`, `api.py`, `dashboard.py`,
+and `gradio_app.py` are four thin, swappable front ends over the same
+`agent/`/`tools/` core.
 
 ## Requirements
 
@@ -147,11 +147,13 @@ curl -s -X POST localhost:8000/query \
   -d '{"message": "shortest driving route from Times Square, New York to Central Park, New York"}'
 ```
 
-## Dashboard
+## Dashboards
 
-A [Streamlit](https://streamlit.io/) dashboard — chat in the sidebar, results on a
-live map — is a third thin front end over the same agent (no HTTP call to `api.py`
-involved; it imports `agent`/`tools` directly, like the CLI does):
+Two dashboards — chat + a live map — are available, both thin front ends over the
+same agent (no HTTP call to `api.py` involved; each imports `agent`/`tools`
+directly, like the CLI does). Pick whichever fits your stack.
+
+### Streamlit
 
 ```bash
 pip install -e ".[dev,dashboard]"
@@ -160,8 +162,22 @@ streamlit run src/geoagent/dashboard.py
 
 ![Streamlit dashboard showing a route on the map](assets/dashboard-screenshot.jpg)
 
-The map auto-fits to whatever was just computed (a route line, isochrone polygon, or
-mining deposit points) using the same GeoJSON-collection mechanism the API uses.
+### Gradio
+
+```bash
+pip install -e ".[dev,gradio]"
+python -m geoagent.gradio_app
+```
+
+![Gradio dashboard showing a route on the map](assets/gradio-screenshot.jpg)
+
+Gradio has no native Leaflet/folium component, so its map is embedded as raw HTML
+(`gr.HTML`) rather than the interactive `streamlit-folium` widget the Streamlit
+version uses — functionally equivalent, slightly less native-feeling.
+
+Both auto-fit the map to whatever was just computed (a route line, isochrone
+polygon, or mining deposit points) using the same GeoJSON-collection mechanism the
+API uses.
 
 ## Configuration
 
@@ -198,6 +214,7 @@ src/geoagent/
 ├── cli.py                # REPL entrypoint (rich terminal UI)
 ├── api.py                # FastAPI microservice entrypoint
 ├── dashboard.py           # Streamlit chat + live map entrypoint
+├── gradio_app.py          # Gradio chat + live map entrypoint
 ├── agent/
 │   ├── loop.py            # OpenAI tool-calling loop
 │   ├── conversation.py    # message history state
@@ -205,7 +222,7 @@ src/geoagent/
 ├── tools/
 │   ├── registry.py        # tool schema + dispatch registry (extension point)
 │   ├── errors.py          # exception -> structured error string for the model
-│   ├── geo_context.py     # context-local GeoJSON feature collector (for api.py/dashboard.py)
+│   ├── geo_context.py     # context-local GeoJSON feature collector (for api.py/dashboards)
 │   ├── routing.py         # street network / route / isochrone tool wrappers
 │   └── wa_mining.py       # MINEDEX / mining tenement tool wrappers
 └── geospatial/
