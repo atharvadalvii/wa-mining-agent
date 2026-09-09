@@ -14,14 +14,11 @@ Given a place name or coordinates, it can:
 
 Every `shortest_route`/`isochrone` call also auto-exports an interactive HTML map
 (via [folium](https://python-visualization.github.io/folium/)) to the local `maps/`
-directory, and the agent's reply includes a link to it — e.g. the route from the demo
-above:
+directory, and the agent's reply includes a link to it. `shortest_route` (left, the
+route from the demo above) and `isochrone` (right, a 15-minute walk from Times Square)
+export differently shaped results — a path vs. a reachable-area polygon:
 
-![Exported route map](assets/route-map-screenshot.jpg)
-
-An isochrone export looks like this (15-minute walk from Times Square):
-
-![Exported isochrone map](assets/isochrone-map-screenshot.jpg)
+![Route vs isochrone map exports, side by side](assets/routing-vs-isochrone.jpg)
 
 It can also look up **Western Australian mining data** direct from DMIRS's public,
 unauthenticated ArcGIS REST service:
