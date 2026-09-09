@@ -3,17 +3,27 @@
 from __future__ import annotations
 
 import json
-import sys
+from typing import Callable
 
 from geoagent.agent.conversation import Conversation
 from geoagent.tools.registry import dispatch, openai_tool_schemas
 
 
 def run_turn(
-    client, model: str, conversation: Conversation, max_turns: int = 8, debug: bool = False
+    client,
+    model: str,
+    conversation: Conversation,
+    max_turns: int = 8,
+    on_tool_call: Callable[[str, dict], None] | None = None,
+    on_tool_result: Callable[[str, str], None] | None = None,
 ) -> str:
     """Runs the tool-calling loop for one user turn, mutating conversation.messages,
-    and returns the final assistant text reply."""
+    and returns the final assistant text reply.
+
+    `on_tool_call`/`on_tool_result` are optional UI hooks (e.g. for a CLI to render
+    tool activity); this function has no rendering opinion of its own so it stays
+    reusable from a future non-CLI caller (e.g. a FastAPI endpoint).
+    """
     for _ in range(max_turns):
         response = client.chat.completions.create(
             model=model,
@@ -28,11 +38,11 @@ def run_turn(
 
         for tool_call in message.tool_calls:
             args = json.loads(tool_call.function.arguments or "{}")
-            if debug:
-                print(f"[tool call] {tool_call.function.name}({args})", file=sys.stderr)
+            if on_tool_call:
+                on_tool_call(tool_call.function.name, args)
             result_text = dispatch(tool_call.function.name, args)
-            if debug:
-                print(f"[tool result] {result_text}", file=sys.stderr)
+            if on_tool_result:
+                on_tool_result(tool_call.function.name, result_text)
             conversation.messages.append(
                 {
                     "role": "tool",

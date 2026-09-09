@@ -3,7 +3,11 @@
 from __future__ import annotations
 
 import argparse
-import sys
+
+from rich.console import Console
+from rich.markdown import Markdown
+from rich.markup import escape
+from rich.panel import Panel
 
 from geoagent.agent.conversation import Conversation
 from geoagent.agent.loop import run_turn
@@ -11,6 +15,16 @@ from geoagent.agent.prompts import SYSTEM_PROMPT
 from geoagent.config import configure_osmnx, load_settings
 
 import geoagent.tools.routing  # noqa: F401  (import for tool-registration side effects)
+
+
+def _make_debug_callbacks(console: Console):
+    def on_tool_call(name: str, args: dict) -> None:
+        console.print(f"[dim]-> calling[/dim] [bold cyan]{escape(name)}[/bold cyan]({escape(str(args))})")
+
+    def on_tool_result(name: str, result: str) -> None:
+        console.print(f"[dim]<- {escape(name)} returned:[/dim] {escape(result)}")
+
+    return on_tool_call, on_tool_result
 
 
 def main() -> None:
@@ -23,9 +37,11 @@ def main() -> None:
     parser.add_argument(
         "--debug",
         action="store_true",
-        help="Echo tool calls and results to stderr as they happen.",
+        help="Show tool calls and results as they happen.",
     )
     args = parser.parse_args()
+
+    console = Console()
 
     settings = load_settings()
     configure_osmnx(
@@ -40,12 +56,23 @@ def main() -> None:
     client = OpenAI(api_key=settings.openai_api_key)
     conversation = Conversation.start(SYSTEM_PROMPT)
 
-    print("geoagent REPL — ask about street routing/isochrones. Ctrl-D or 'exit' to quit.")
+    on_tool_call = on_tool_result = None
+    if args.debug:
+        on_tool_call, on_tool_result = _make_debug_callbacks(console)
+
+    console.print(
+        Panel(
+            "Ask about street routing/isochrones. Type 'exit' or Ctrl-D to quit.",
+            title="geoagent",
+            border_style="cyan",
+        )
+    )
+
     while True:
         try:
-            line = input("you> ")
+            line = console.input("[bold cyan]you>[/bold cyan] ")
         except EOFError:
-            print()
+            console.print()
             break
         if line.strip().lower() in {"exit", "quit"}:
             break
@@ -54,17 +81,19 @@ def main() -> None:
 
         conversation.add_user(line)
         try:
-            reply = run_turn(
-                client,
-                settings.openai_model,
-                conversation,
-                settings.max_agent_turns,
-                debug=args.debug,
-            )
+            with console.status("[bold green]Thinking...[/bold green]", spinner="dots"):
+                reply = run_turn(
+                    client,
+                    settings.openai_model,
+                    conversation,
+                    settings.max_agent_turns,
+                    on_tool_call=on_tool_call,
+                    on_tool_result=on_tool_result,
+                )
         except Exception as exc:
-            print(f"agent> Something went wrong: {exc}", file=sys.stderr)
+            console.print(f"[bold red]Something went wrong:[/bold red] {escape(str(exc))}")
             continue
-        print(f"agent> {reply}")
+        console.print(Panel(Markdown(reply), title="agent", border_style="green"))
 
 
 if __name__ == "__main__":
