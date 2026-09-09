@@ -28,6 +28,10 @@ api = [
     "fastapi",
     "uvicorn[standard]",
 ]
+dashboard = [
+    "streamlit",
+    "streamlit-folium",
+]
 
 [project.scripts]
 geoagent = "geoagent.cli:main"

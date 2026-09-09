@@ -46,8 +46,10 @@ see both real, live tool calls and their raw results:
 flowchart LR
     U1["CLI user<br/>(rich REPL)"] -->|natural language| L["Agent Loop<br/>(OpenAI tool calling)"]
     U2["HTTP client<br/>(FastAPI /query)"] -->|natural language| L
+    U3["Streamlit dashboard<br/>(chat + live map)"] -->|natural language| L
     L -->|reply + geojson / map link| U1
     L -->|reply + geojson| U2
+    L -->|reply + geojson| U3
 
     L -->|tool call| REG["Tool Registry<br/>(schemas + dispatch)"]
     REG -->|result text| L
@@ -65,6 +67,7 @@ flowchart LR
 
     style U1 fill:#1a73e8,color:#fff
     style U2 fill:#1a73e8,color:#fff
+    style U3 fill:#1a73e8,color:#fff
     style L fill:#188038,color:#fff
     style REG fill:#e37400,color:#fff
 ```
@@ -73,10 +76,11 @@ flowchart LR
 knowledge of OpenAI. `tools/` adapts that into OpenAI tool schemas and lossy,
 model-readable text summaries — full data (route coordinates, isochrone polygons)
 stays out of the LLM's context but is retained for map export and, via
-`tools/geo_context.py`'s context-local collector, for the API's GeoJSON response.
-`agent/` only talks to the tool registry's generic interface, so it has no dependency
-on OSMnx, GeoPandas, or DMIRS at all — both `cli.py` and `api.py` are thin, swappable
-front ends over the same `agent/`/`tools/` core.
+`tools/geo_context.py`'s context-local collector, for the API's and dashboard's
+GeoJSON. `agent/` only talks to the tool registry's generic interface, so it has no
+dependency on OSMnx, GeoPandas, or DMIRS at all — `cli.py`, `api.py`, and
+`dashboard.py` are three thin, swappable front ends over the same `agent/`/`tools/`
+core.
 
 ## Requirements
 
@@ -143,6 +147,22 @@ curl -s -X POST localhost:8000/query \
   -d '{"message": "shortest driving route from Times Square, New York to Central Park, New York"}'
 ```
 
+## Dashboard
+
+A [Streamlit](https://streamlit.io/) dashboard — chat in the sidebar, results on a
+live map — is a third thin front end over the same agent (no HTTP call to `api.py`
+involved; it imports `agent`/`tools` directly, like the CLI does):
+
+```bash
+pip install -e ".[dev,dashboard]"
+streamlit run src/geoagent/dashboard.py
+```
+
+![Streamlit dashboard showing a route on the map](assets/dashboard-screenshot.jpg)
+
+The map auto-fits to whatever was just computed (a route line, isochrone polygon, or
+mining deposit points) using the same GeoJSON-collection mechanism the API uses.
+
 ## Configuration
 
 All settings are read from environment variables (via `.env`):
@@ -177,6 +197,7 @@ src/geoagent/
 ├── config.py            # env/settings loading, OSMnx cache configuration
 ├── cli.py                # REPL entrypoint (rich terminal UI)
 ├── api.py                # FastAPI microservice entrypoint
+├── dashboard.py           # Streamlit chat + live map entrypoint
 ├── agent/
 │   ├── loop.py            # OpenAI tool-calling loop
 │   ├── conversation.py    # message history state
@@ -184,7 +205,7 @@ src/geoagent/
 ├── tools/
 │   ├── registry.py        # tool schema + dispatch registry (extension point)
 │   ├── errors.py          # exception -> structured error string for the model
-│   ├── geo_context.py     # context-local GeoJSON feature collector (for api.py)
+│   ├── geo_context.py     # context-local GeoJSON feature collector (for api.py/dashboard.py)
 │   ├── routing.py         # street network / route / isochrone tool wrappers
 │   └── wa_mining.py       # MINEDEX / mining tenement tool wrappers
 └── geospatial/
