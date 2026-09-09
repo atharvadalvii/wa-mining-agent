@@ -27,6 +27,39 @@ These two datasets aren't cross-referenced (tenements carry no commodity data, a
 deposits carry no legal title info), so a query like "iron ore leases near X" triggers
 both tools and the agent presents them as separate results.
 
+## Architecture
+
+```mermaid
+flowchart LR
+    U["User<br/>(rich CLI REPL)"] -->|natural language| L["Agent Loop<br/>(OpenAI tool calling)"]
+    L -->|final reply + map link| U
+
+    L -->|tool call| REG["Tool Registry<br/>(schemas + dispatch)"]
+    REG -->|result text| L
+
+    REG --> RT["Routing / Isochrone tools"]
+    REG --> MT["WA Mining tools"]
+
+    RT --> OSM["OSMnx / NetworkX<br/>street graphs + routing"]
+    RT --> GPD["GeoPandas<br/>isochrone geometry"]
+    OSM --> MAP["folium<br/>HTML map export"]
+    GPD --> MAP
+    MAP -.->|saved file path| RT
+
+    MT --> DMIRS["DMIRS ArcGIS REST API<br/>MINEDEX + TENGRAPH"]
+
+    style U fill:#1a73e8,color:#fff
+    style L fill:#188038,color:#fff
+    style REG fill:#e37400,color:#fff
+```
+
+`geospatial/` holds pure domain logic (OSMnx/NetworkX/GeoPandas/DMIRS calls) with no
+knowledge of OpenAI. `tools/` adapts that into OpenAI tool schemas and lossy,
+model-readable text summaries — full data (route coordinates, isochrone polygons)
+stays out of the LLM's context but is retained for map export. `agent/` only talks to
+the tool registry's generic interface, so it has no dependency on OSMnx, GeoPandas, or
+DMIRS at all — a future FastAPI layer could reuse `agent/` and `tools/` unchanged.
+
 ## Requirements
 
 - Python 3.10+
@@ -95,15 +128,26 @@ pytest -m integration  # also hits real OSM/Overpass data
 
 ```
 src/geoagent/
-├── config.py       # env/settings loading, OSMnx cache configuration
-├── cli.py          # REPL entrypoint (rich terminal UI)
-├── agent/          # OpenAI tool-calling loop, conversation state, system prompt
-├── tools/          # OpenAI tool schemas + dispatch registry (extension point)
-└── geospatial/      # OSMnx/GeoPandas domain logic (routing, isochrones, geocoding, map export)
+├── config.py            # env/settings loading, OSMnx cache configuration
+├── cli.py                # REPL entrypoint (rich terminal UI)
+├── agent/
+│   ├── loop.py            # OpenAI tool-calling loop
+│   ├── conversation.py    # message history state
+│   └── prompts.py         # system prompt
+├── tools/
+│   ├── registry.py        # tool schema + dispatch registry (extension point)
+│   ├── errors.py          # exception -> structured error string for the model
+│   ├── routing.py         # street network / route / isochrone tool wrappers
+│   └── wa_mining.py       # MINEDEX / mining tenement tool wrappers
+└── geospatial/
+    ├── network.py          # OSMnx graph fetch + in-process cache
+    ├── routing.py          # shortest-path computation
+    ├── isochrone.py        # reachable-area computation
+    ├── geocode.py          # place name / "lat,lon" resolution
+    ├── mapping.py          # folium HTML map export
+    ├── wa_mining.py        # DMIRS ArcGIS REST queries
+    └── models.py           # result dataclasses + their model-facing text summaries
 ```
 
-`geospatial/` has no knowledge of OpenAI; `tools/` adapts domain calls into OpenAI
-tool schemas and model-readable text; `agent/` only talks to the tool registry's
-generic interface. To add a new capability (e.g. POI search), add a
-`geospatial/<feature>.py` module and a `tools/<feature>.py` that registers its own
-tool specs — no changes needed to `agent/`.
+To add a new capability (e.g. POI search), add a `geospatial/<feature>.py` module and
+a `tools/<feature>.py` that registers its own tool specs — no changes needed to `agent/`.
