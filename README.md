@@ -10,6 +10,10 @@ Given a place name or coordinates, it can:
 - compute shortest-path routes by distance or travel time (`shortest_route`)
 - compute reachable-area isochrones (`isochrone`)
 
+Every `shortest_route`/`isochrone` call also auto-exports an interactive HTML map
+(via [folium](https://python-visualization.github.io/folium/)) to the local `maps/`
+directory, and the agent's reply includes a link to it.
+
 ## Requirements
 
 - Python 3.10+
@@ -56,6 +60,7 @@ All settings are read from environment variables (via `.env`):
 | `OPENAI_API_KEY` | *(required)* | OpenAI API key |
 | `GEOAGENT_MODEL` | `gpt-4o-mini` | OpenAI model to use |
 | `GEOAGENT_CACHE_DIR` | `.cache/osmnx` | OSMnx disk cache directory |
+| `GEOAGENT_MAPS_DIR` | `maps` | Where auto-exported route/isochrone HTML maps are saved |
 | `GEOAGENT_MAX_TURNS` | `8` | Safety cap on tool-call loop iterations per user message |
 | `GEOAGENT_OVERPASS_URL` | *(unset, use OSMnx default)* | Override the Overpass API mirror |
 | `GEOAGENT_OVERPASS_RATE_LIMIT` | `true` | Set `false` to disable OSMnx's Overpass rate-limit slot check |
@@ -78,10 +83,10 @@ pytest -m integration  # also hits real OSM/Overpass data
 ```
 src/geoagent/
 ├── config.py       # env/settings loading, OSMnx cache configuration
-├── cli.py          # REPL entrypoint
+├── cli.py          # REPL entrypoint (rich terminal UI)
 ├── agent/          # OpenAI tool-calling loop, conversation state, system prompt
 ├── tools/          # OpenAI tool schemas + dispatch registry (extension point)
-└── geospatial/      # OSMnx/GeoPandas domain logic (routing, isochrones, geocoding)
+└── geospatial/      # OSMnx/GeoPandas domain logic (routing, isochrones, geocoding, map export)
 ```
 
 `geospatial/` has no knowledge of OpenAI; `tools/` adapts domain calls into OpenAI
