@@ -34,7 +34,14 @@ unauthenticated ArcGIS REST service:
 
 These two datasets aren't cross-referenced (tenements carry no commodity data, and
 deposits carry no legal title info), so a query like "iron ore leases near X" triggers
-both tools and the agent presents them as separate results.
+both tools and the agent presents them as separate results — with `--debug` on, you can
+see both real, live tool calls and their raw results:
+
+![WA mining tools debug output](assets/mining-debug-screenshot.jpg)
+
+...and the final reply the agent composes from them:
+
+![WA mining tools agent reply](assets/mining-result-screenshot.jpg)
 
 ## Architecture
 
