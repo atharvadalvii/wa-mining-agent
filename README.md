@@ -19,6 +19,10 @@ above:
 
 ![Exported route map](assets/route-map-screenshot.jpg)
 
+An isochrone export looks like this (15-minute walk from Times Square):
+
+![Exported isochrone map](assets/isochrone-map-screenshot.jpg)
+
 It can also look up **Western Australian mining data** direct from DMIRS's public,
 unauthenticated ArcGIS REST service:
 
