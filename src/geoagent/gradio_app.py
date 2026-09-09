@@ -63,10 +63,26 @@ def _map_html(features: list[dict]) -> str:
 def respond(message: str, chat_history: list, conversation: Conversation | None):
     if conversation is None:
         conversation = Conversation.start(SYSTEM_PROMPT)
+    checkpoint = len(conversation.messages)
     conversation.add_user(message)
 
-    with collect_geo_features() as features:
-        run_turn(client, settings.openai_model, conversation, settings.max_agent_turns)
+    features: list[dict] = []
+    try:
+        with collect_geo_features() as features:
+            run_turn(client, settings.openai_model, conversation, settings.max_agent_turns)
+    except Exception as exc:
+        # Roll back to before this turn so a failed/interrupted request can't leave
+        # a half-appended tool call in history — that would make every subsequent
+        # turn fail the same way, since OpenAI rejects a message list with an
+        # unanswered tool_call.
+        conversation.messages = conversation.messages[:checkpoint]
+        display_history = [
+            {"role": m["role"], "content": m["content"]}
+            for m in conversation.messages
+            if m.get("role") in ("user", "assistant") and m.get("content")
+        ]
+        display_history.append({"role": "assistant", "content": f"Something went wrong: {exc}"})
+        return "", display_history, conversation, _map_html([])
 
     display_history = [
         {"role": m["role"], "content": m["content"]}

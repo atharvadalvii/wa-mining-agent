@@ -63,13 +63,25 @@ with st.sidebar:
 
     prompt = st.chat_input("Ask about routing, isochrones, or WA mining data...")
     if prompt:
+        checkpoint = len(st.session_state.conversation.messages)
         st.session_state.conversation.add_user(prompt)
-        with st.spinner("Thinking..."):
-            with collect_geo_features() as features:
-                run_turn(client, settings.openai_model, st.session_state.conversation, settings.max_agent_turns)
-            if features:
-                st.session_state.features = features
-        st.rerun()
+        try:
+            with st.spinner("Thinking..."):
+                with collect_geo_features() as features:
+                    run_turn(
+                        client, settings.openai_model, st.session_state.conversation, settings.max_agent_turns
+                    )
+                if features:
+                    st.session_state.features = features
+        except Exception as exc:
+            # Roll back to before this turn so a failed/interrupted request (e.g. a
+            # transient API error) can't leave a half-appended tool call in history —
+            # that would make every subsequent turn fail the same way, since OpenAI
+            # rejects a message list with an unanswered tool_call.
+            st.session_state.conversation.messages = st.session_state.conversation.messages[:checkpoint]
+            st.error(f"Something went wrong: {exc}")
+        else:
+            st.rerun()
 
 
 def _style(feature: dict) -> dict:
