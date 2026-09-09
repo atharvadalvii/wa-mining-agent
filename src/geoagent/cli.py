@@ -16,6 +16,7 @@ from geoagent.config import configure_osmnx, load_settings
 from geoagent.geospatial.mapping import configure_maps_dir
 
 import geoagent.tools.routing  # noqa: F401  (import for tool-registration side effects)
+import geoagent.tools.wa_mining  # noqa: F401
 
 
 def _make_debug_callbacks(console: Console):

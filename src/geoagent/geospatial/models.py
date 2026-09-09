@@ -65,3 +65,76 @@ class IsochroneResult:
             f"covering approximately {self.area_km2:.2f} km^2 "
             f"(approx radius {self.approx_radius_m:.0f} m)."
         )
+
+
+_MAX_LISTED = 15
+
+
+@dataclass
+class MiningDepositsResult:
+    location_label: str
+    radius_km: float
+    commodity_filter: str | None
+    site_type_filter: str | None
+    total_count: int
+    sites: list[dict] = field(default_factory=list)
+
+    def to_tool_text(self) -> str:
+        filters = []
+        if self.commodity_filter:
+            filters.append(f"commodity~'{self.commodity_filter}'")
+        if self.site_type_filter:
+            filters.append(f"type='{self.site_type_filter}'")
+        filter_note = f" ({', '.join(filters)})" if filters else ""
+
+        if self.total_count == 0:
+            return (
+                f"No MINEDEX mining sites found within {self.radius_km:.0f} km of "
+                f"'{self.location_label}'{filter_note}."
+            )
+
+        lines = [
+            f"{s.get('site_title', '?')} — {s.get('commodity', '?')}, "
+            f"{s.get('site_type_', '?')} ({s.get('site_stage', '?')})"
+            for s in self.sites[:_MAX_LISTED]
+        ]
+        more = f" (+{self.total_count - len(lines)} more not shown)" if self.total_count > len(lines) else ""
+        return (
+            f"Found {self.total_count} MINEDEX mining site(s) within {self.radius_km:.0f} km "
+            f"of '{self.location_label}'{filter_note}:\n- " + "\n- ".join(lines) + more
+        )
+
+
+@dataclass
+class MiningTenementsResult:
+    location_label: str
+    radius_km: float
+    type_filter: str | None
+    status_filter: str | None
+    total_count: int
+    tenements: list[dict] = field(default_factory=list)
+
+    def to_tool_text(self) -> str:
+        filters = []
+        if self.type_filter:
+            filters.append(f"type~'{self.type_filter}'")
+        if self.status_filter:
+            filters.append(f"status='{self.status_filter}'")
+        filter_note = f" ({', '.join(filters)})" if filters else ""
+
+        if self.total_count == 0:
+            return (
+                f"No mining tenements found within {self.radius_km:.0f} km of "
+                f"'{self.location_label}'{filter_note}."
+            )
+
+        lines = [
+            f"{t.get('tenid', '?')} — {t.get('type', '?')}, {t.get('tenstatus', '?')}, "
+            f"holder: {t.get('holder1', '?')}, area: {t.get('legal_area', '?')} {t.get('unit_of_me', '')}"
+            for t in self.tenements[:_MAX_LISTED]
+        ]
+        more = f" (+{self.total_count - len(lines)} more not shown)" if self.total_count > len(lines) else ""
+        return (
+            f"Found {self.total_count} mining tenement(s) within {self.radius_km:.0f} km "
+            f"of '{self.location_label}'{filter_note}:\n- " + "\n- ".join(lines) + more
+        )

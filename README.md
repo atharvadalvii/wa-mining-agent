@@ -14,6 +14,19 @@ Every `shortest_route`/`isochrone` call also auto-exports an interactive HTML ma
 (via [folium](https://python-visualization.github.io/folium/)) to the local `maps/`
 directory, and the agent's reply includes a link to it.
 
+It can also look up **Western Australian mining data** direct from DMIRS's public,
+unauthenticated ArcGIS REST service:
+
+- mines, mineral deposits, and prospects near a place (`find_mining_deposits`, from
+  the MINEDEX dataset) — filterable by commodity and/or site type
+- mining tenements — legal titles like mining leases and exploration licences — near
+  a place (`find_mining_tenements`, from the TENGRAPH system) — filterable by tenement
+  type and/or status (live/pending only; historical tenements aren't covered)
+
+These two datasets aren't cross-referenced (tenements carry no commodity data, and
+deposits carry no legal title info), so a query like "iron ore leases near X" triggers
+both tools and the agent presents them as separate results.
+
 ## Requirements
 
 - Python 3.10+
