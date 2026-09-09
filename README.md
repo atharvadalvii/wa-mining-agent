@@ -4,6 +4,8 @@ A CLI geospatial AI agent that answers natural-language street-routing questions
 having an LLM call out to OSMnx/GeoPandas-backed tools via OpenAI's native tool
 (function) calling — no agent framework involved.
 
+![geoagent demo](assets/demo.gif)
+
 Given a place name or coordinates, it can:
 
 - fetch/summarize a street network graph (`get_street_network`)
