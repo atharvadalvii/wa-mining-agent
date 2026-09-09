@@ -46,6 +46,24 @@ class RouteResult:
             f"{self.length_m / 1000:.2f} km{time_part}, {self.n_waypoints} waypoints."
         )
 
+    def to_geojson_feature(self) -> dict:
+        return {
+            "type": "Feature",
+            "geometry": {
+                "type": "LineString",
+                "coordinates": [[lon, lat] for lat, lon in self.coordinates],
+            },
+            "properties": {
+                "kind": "route",
+                "origin": self.origin_label,
+                "destination": self.destination_label,
+                "network_type": self.network_type,
+                "optimized_for": self.optimized_for,
+                "length_m": self.length_m,
+                "estimated_time_min": self.estimated_time_min,
+            },
+        }
+
 
 @dataclass
 class IsochroneResult:
@@ -65,6 +83,21 @@ class IsochroneResult:
             f"covering approximately {self.area_km2:.2f} km^2 "
             f"(approx radius {self.approx_radius_m:.0f} m)."
         )
+
+    def to_geojson_feature(self) -> dict:
+        coords = [[lon, lat] for lat, lon in self.hull_coords]
+        return {
+            "type": "Feature",
+            "geometry": {"type": "Polygon", "coordinates": [coords]} if coords else None,
+            "properties": {
+                "kind": "isochrone",
+                "center": self.center_label,
+                "minutes": self.minutes,
+                "network_type": self.network_type,
+                "area_km2": self.area_km2,
+                "n_reachable_nodes": self.n_reachable_nodes,
+            },
+        }
 
 
 _MAX_LISTED = 15
@@ -103,6 +136,29 @@ class MiningDepositsResult:
             f"Found {self.total_count} MINEDEX mining site(s) within {self.radius_km:.0f} km "
             f"of '{self.location_label}'{filter_note}:\n- " + "\n- ".join(lines) + more
         )
+
+    def to_geojson_features(self) -> list[dict]:
+        """One Point feature per fetched site (not per total_count — only sites
+        actually returned by the capped detail query have coordinates available)."""
+        features = []
+        for site in self.sites:
+            lat, lon = site.get("latitude"), site.get("longitude")
+            if lat is None or lon is None:
+                continue
+            features.append(
+                {
+                    "type": "Feature",
+                    "geometry": {"type": "Point", "coordinates": [lon, lat]},
+                    "properties": {
+                        "kind": "mining_deposit",
+                        "site_title": site.get("site_title"),
+                        "commodity": site.get("commodity"),
+                        "site_type": site.get("site_type_"),
+                        "site_stage": site.get("site_stage"),
+                    },
+                }
+            )
+        return features
 
 
 @dataclass

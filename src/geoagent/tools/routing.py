@@ -6,6 +6,7 @@ from geoagent.geospatial.isochrone import compute_isochrone
 from geoagent.geospatial.mapping import save_isochrone_map, save_route_map
 from geoagent.geospatial.network import get_network_summary
 from geoagent.geospatial.routing import compute_shortest_route
+from geoagent.tools.geo_context import record_geo_feature
 from geoagent.tools.registry import ToolSpec, register
 
 
@@ -44,6 +45,7 @@ def handle_shortest_route(
     result = compute_shortest_route(
         origin=origin, destination=destination, network_type=network_type, weight=weight
     )
+    record_geo_feature(result.to_geojson_feature())
     return _with_map_export(result.to_tool_text(), lambda: save_route_map(result))
 
 
@@ -53,6 +55,7 @@ def handle_isochrone(
     network_type: str = "walk",
 ) -> str:
     result = compute_isochrone(center=center, minutes=minutes, network_type=network_type)
+    record_geo_feature(result.to_geojson_feature())
     return _with_map_export(result.to_tool_text(), lambda: save_isochrone_map(result))
 
 

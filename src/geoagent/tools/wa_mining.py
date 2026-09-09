@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from geoagent.geospatial.wa_mining import find_mining_deposits, find_mining_tenements
+from geoagent.tools.geo_context import record_geo_feature
 from geoagent.tools.registry import ToolSpec, register
 
 
@@ -15,6 +16,8 @@ def handle_find_mining_deposits(
     result = find_mining_deposits(
         location=location, radius_km=radius_km, commodity=commodity, site_type=site_type
     )
+    for feature in result.to_geojson_features():
+        record_geo_feature(feature)
     return result.to_tool_text()
 
 
