@@ -42,6 +42,58 @@ def load_settings() -> Settings:
     )
 
 
+def _pick_reachable_ip(hostname: str, port: int = 443, timeout: float = 3.0) -> str | None:
+    import socket
+
+    try:
+        infos = socket.getaddrinfo(hostname, port, proto=socket.IPPROTO_TCP)
+    except OSError:
+        return None
+    seen: set[str] = set()
+    for info in infos:
+        ip = info[4][0]
+        if ip in seen:
+            continue
+        seen.add(ip)
+        try:
+            with socket.create_connection((ip, port), timeout=timeout):
+                return ip
+        except OSError:
+            continue
+    return None
+
+
+def _pin_dns_to_reachable_ip(hostname: str, probe_ttl: float = 5.0) -> None:
+    """OSMnx pins its DNS resolution for the Overpass host to whichever IP
+    `socket.gethostbyname()` happens to return, with no fallback if that specific
+    IP is unreachable — unlike a normal HTTP client (curl, requests), which tries
+    every address a hostname resolves to. Worse, which of `overpass-api.de`'s
+    backend IPs is reachable from a given network can flap on a timescale of
+    seconds to minutes, not just hours, so a one-time pin can already be stale by
+    the time OSMnx uses it. This re-probes (at most once every `probe_ttl`
+    seconds) so `gethostbyname` always returns whichever IP was reachable most
+    recently, rather than a single value fixed at startup.
+    """
+    import socket
+    import time
+
+    original_gethostbyname = socket.gethostbyname
+    state: dict[str, object] = {"ip": None, "checked_at": 0.0}
+
+    def _patched(host: str) -> str:
+        if host != hostname:
+            return original_gethostbyname(host)
+        now = time.monotonic()
+        if state["ip"] is None or now - state["checked_at"] > probe_ttl:
+            fresh = _pick_reachable_ip(hostname)
+            if fresh:
+                state["ip"] = fresh
+            state["checked_at"] = now
+        return state["ip"] or original_gethostbyname(host)
+
+    socket.gethostbyname = _patched
+
+
 def configure_osmnx(
     cache_dir: Path,
     use_cache: bool = True,
@@ -58,4 +110,6 @@ def configure_osmnx(
     ox.settings.http_user_agent = "geoagent/0.1 (contact: atharvadal7@gmail.com)"
     if overpass_url:
         ox.settings.overpass_url = overpass_url
+    else:
+        _pin_dns_to_reachable_ip("overpass-api.de")
     ox.settings.overpass_rate_limit = overpass_rate_limit

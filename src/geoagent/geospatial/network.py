@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import math
+import time
+from typing import Callable
 
 import networkx as nx
 
@@ -20,15 +22,34 @@ def haversine_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     return 2 * r * math.asin(math.sqrt(a))
 
 
+# Some public Overpass mirrors are served by multiple backend IPs whose
+# reachability from a given network can flap within seconds (see
+# geoagent.config's DNS re-probing) — a couple of quick retries meaningfully
+# improves success odds without risking a long pile-up, since a bad-IP failure
+# is a fast "connection refused", not a slow timeout.
+_MAX_FETCH_ATTEMPTS = 3
+_RETRY_DELAY_S = 3.0
+
+
+def _fetch_with_retry(fetch_fn: Callable[[], nx.MultiDiGraph], error_prefix: str) -> nx.MultiDiGraph:
+    last_exc: Exception | None = None
+    for attempt in range(_MAX_FETCH_ATTEMPTS):
+        try:
+            return fetch_fn()
+        except Exception as exc:
+            last_exc = exc
+            if attempt < _MAX_FETCH_ATTEMPTS - 1:
+                time.sleep(_RETRY_DELAY_S)
+    raise NetworkFetchError(f"{error_prefix}: {last_exc}") from last_exc
+
+
 def fetch_network_for_place(place: str, network_type: str = "drive") -> nx.MultiDiGraph:
     import osmnx as ox
 
-    try:
-        graph = ox.graph_from_place(place, network_type=network_type)
-    except Exception as exc:
-        raise NetworkFetchError(
-            f"Could not fetch a street network for '{place}': {exc}"
-        ) from exc
+    graph = _fetch_with_retry(
+        lambda: ox.graph_from_place(place, network_type=network_type),
+        f"Could not fetch a street network for '{place}'",
+    )
     return _add_speeds_and_times(graph, network_type)
 
 
@@ -37,12 +58,23 @@ def fetch_network_for_point(
 ) -> nx.MultiDiGraph:
     import osmnx as ox
 
-    try:
-        graph = ox.graph_from_point((lat, lon), dist=radius_m, network_type=network_type)
-    except Exception as exc:
-        raise NetworkFetchError(
-            f"Could not fetch a street network around ({lat}, {lon}): {exc}"
-        ) from exc
+    graph = _fetch_with_retry(
+        lambda: ox.graph_from_point((lat, lon), dist=radius_m, network_type=network_type),
+        f"Could not fetch a street network around ({lat}, {lon})",
+    )
+    return _add_speeds_and_times(graph, network_type)
+
+
+def fetch_network_for_bbox(
+    north: float, south: float, east: float, west: float, network_type: str = "drive"
+) -> nx.MultiDiGraph:
+    import osmnx as ox
+
+    graph = _fetch_with_retry(
+        lambda: ox.graph_from_bbox((west, south, east, north), network_type=network_type),
+        f"Could not fetch a street network for bbox "
+        f"(north={north}, south={south}, east={east}, west={west})",
+    )
     return _add_speeds_and_times(graph, network_type)
 
 
@@ -78,6 +110,7 @@ class NetworkCache:
     def __init__(self) -> None:
         self._by_place: dict[tuple[str, str], nx.MultiDiGraph] = {}
         self._by_point: dict[tuple[float, float, float, str], nx.MultiDiGraph] = {}
+        self._by_bbox: dict[tuple[float, float, float, float, str], nx.MultiDiGraph] = {}
 
     def get_for_place(self, place: str, network_type: str) -> nx.MultiDiGraph:
         key = (place, network_type)
@@ -92,6 +125,14 @@ class NetworkCache:
         if key not in self._by_point:
             self._by_point[key] = fetch_network_for_point(lat, lon, radius_m, network_type)
         return self._by_point[key]
+
+    def get_for_bbox(
+        self, north: float, south: float, east: float, west: float, network_type: str
+    ) -> nx.MultiDiGraph:
+        key = (round(north, 4), round(south, 4), round(east, 4), round(west, 4), network_type)
+        if key not in self._by_bbox:
+            self._by_bbox[key] = fetch_network_for_bbox(north, south, east, west, network_type)
+        return self._by_bbox[key]
 
 
 default_cache = NetworkCache()
