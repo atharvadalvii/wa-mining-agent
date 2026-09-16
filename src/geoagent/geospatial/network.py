@@ -24,9 +24,13 @@ def haversine_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
 
 # Some public Overpass mirrors are served by multiple backend IPs whose
 # reachability from a given network can flap within seconds (see
-# geoagent.config's DNS re-probing) — a couple of quick retries meaningfully
-# improves success odds without risking a long pile-up, since a bad-IP failure
-# is a fast "connection refused", not a slow timeout.
+# geoagent.config's DNS re-probing) — retrying gives a fresh DNS probe another
+# chance to land on a working IP. A bad-IP failure is sometimes a fast
+# "connection refused", but can also be a slow hang up to
+# ox.settings.requests_timeout (30s, see geoagent.config) — with that
+# timeout kept short specifically so this retry budget stays bounded (worst
+# case here: 3 * 30s + 2 * 3s ~= 96s, not the ~9 minutes it would be at
+# OSMnx's much longer default).
 _MAX_FETCH_ATTEMPTS = 3
 _RETRY_DELAY_S = 3.0
 

@@ -106,7 +106,18 @@ def configure_osmnx(
     ox.settings.use_cache = use_cache
     ox.settings.cache_folder = str(cache_dir)
     ox.settings.log_console = False
-    ox.settings.timeout = 180
+    # The real setting is `requests_timeout`, not `timeout` (OSMnx has no
+    # `timeout` attribute at all — setting it silently creates an unused
+    # attribute rather than erroring, so an earlier version of this line was a
+    # complete no-op). requests_timeout governs every HTTP request OSMnx makes
+    # — both Overpass and Nominatim geocoding — and, since OSMnx also embeds
+    # it into the Overpass query string's own `[timeout:N]` directive, the
+    # server-side Overpass execution budget too. Its 180s default meant a
+    # single slow/hanging request, combined with a couple of retries, could
+    # keep an interactive query "thinking" for the better part of 10 minutes
+    # with no feedback. 30s is still generous for a legitimate fetch; a
+    # request that hasn't responded by then is far more likely hung.
+    ox.settings.requests_timeout = 30
     ox.settings.http_user_agent = "geoagent/0.1 (contact: atharvadal7@gmail.com)"
     if overpass_url:
         ox.settings.overpass_url = overpass_url
