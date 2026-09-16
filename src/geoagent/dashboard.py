@@ -17,6 +17,7 @@ from geoagent.agent.conversation import Conversation
 from geoagent.agent.loop import run_turn
 from geoagent.agent.prompts import SYSTEM_PROMPT
 from geoagent.config import configure_osmnx, load_settings
+from geoagent.geospatial import local_extract
 from geoagent.geospatial.mapping import configure_maps_dir
 from geoagent.tools.geo_context import collect_geo_features
 
@@ -35,6 +36,7 @@ def _setup():
         overpass_rate_limit=settings.overpass_rate_limit,
     )
     configure_maps_dir(settings.maps_dir)
+    local_extract.warm_up()
     from openai import OpenAI
 
     return settings, OpenAI(api_key=settings.openai_api_key)

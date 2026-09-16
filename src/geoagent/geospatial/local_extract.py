@@ -149,3 +149,18 @@ class LocalNetworkStore:
 
 
 default_store = LocalNetworkStore()
+
+
+def warm_up() -> None:
+    """Pre-loads every extracted network_type's tables into memory.
+
+    Loading a network_type's parquet tables the first time (~15-30s for the
+    larger walk/bike tables) used to happen lazily on whichever query hit it
+    first — a real UX problem, since that meant an unpredictable, unexplained
+    slow response buried in the middle of a conversation instead of a single
+    predictable wait at startup. Call this once, right after configure_osmnx,
+    from each entrypoint (cli.py, dashboard.py, gradio_app.py, api.py).
+    """
+    for network_type in SUPPORTED_NETWORK_TYPES:
+        if is_extracted(network_type):
+            default_store._load_tables(network_type)
