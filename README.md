@@ -1,5 +1,7 @@
 # geoagent
 
+[![Tests](https://github.com/atharvadalvii/geodev/actions/workflows/tests.yml/badge.svg)](https://github.com/atharvadalvii/geodev/actions/workflows/tests.yml)
+
 A CLI geospatial AI agent that answers natural-language street-routing questions by
 having an LLM call out to OSMnx/GeoPandas-backed tools via OpenAI's native tool
 (function) calling — no agent framework involved.
