@@ -73,6 +73,14 @@ def _pin_dns_to_reachable_ip(hostname: str, probe_ttl: float = 5.0) -> None:
     the time OSMnx uses it. This re-probes (at most once every `probe_ttl`
     seconds) so `gethostbyname` always returns whichever IP was reachable most
     recently, rather than a single value fixed at startup.
+
+    When no candidate IP answers the probe (all currently unreachable), this
+    falls back to plain, unverified DNS resolution rather than raising:
+    OSMnx's own `_config_dns` catches a `gethostbyname` failure by re-resolving
+    via a DNS-over-HTTPS detour, which doesn't check reachability either and
+    just adds a slow, unhelpful extra hop. See `network._fetch_with_retry`'s
+    up-front reachability check for how a totally-unreachable host is actually
+    failed fast, ahead of ever reaching OSMnx's fetch machinery.
     """
     import socket
     import time
@@ -115,8 +123,18 @@ def configure_osmnx(
     # server-side Overpass execution budget too. Its 180s default meant a
     # single slow/hanging request, combined with a couple of retries, could
     # keep an interactive query "thinking" for the better part of 10 minutes
-    # with no feedback. 30s is still generous for a legitimate fetch; a
-    # request that hasn't responded by then is far more likely hung.
+    # with no feedback.
+    #
+    # NOTE: this can't be split into a (connect_timeout, read_timeout) tuple
+    # (which `requests`'s own `timeout=` accepts) to fail fast on a dead IP —
+    # OSMnx double-uses this same value as the Overpass QL query's own
+    # server-side `[timeout:N]` execution budget (see `_make_overpass_settings`
+    # in osmnx/_overpass.py), which expects a single integer. A tuple here
+    # would get stringified straight into the query text as `[timeout:(8, 30)]`,
+    # a syntax error that would break every *reachable* Overpass request, not
+    # just speed up the unreachable case. The connect-side fast-fail instead
+    # lives in `is_overpass_reachable` below, used by
+    # `network._fetch_with_retry` as an up-front check.
     ox.settings.requests_timeout = 30
     ox.settings.http_user_agent = "geoagent/0.1 (contact: atharvadal7@gmail.com)"
     if overpass_url:
@@ -124,3 +142,25 @@ def configure_osmnx(
     else:
         _pin_dns_to_reachable_ip("overpass-api.de")
     ox.settings.overpass_rate_limit = overpass_rate_limit
+
+
+def is_overpass_reachable() -> bool:
+    """A fast (bounded to a couple seconds per candidate IP), independent
+    TCP-reachability check for the currently configured Overpass host.
+
+    Exists because OSMnx has no cheap way to fail fast on total
+    unreachability: when its own internal `/status` check (done before every
+    query, to respect the server's rate limit — see `overpass_rate_limit`)
+    can't connect, it doesn't fail — it falls back to a hardcoded 60-second
+    "default_pause" sleep and then attempts the real query anyway, which then
+    also fails after its own full `requests_timeout`. That sequence repeats
+    per retry, turning a totally-dead Overpass mirror into a multi-minute
+    wait. Call this before attempting a fetch (see
+    `network._fetch_with_retry`) to skip straight to a clear error instead.
+    """
+    import osmnx as ox
+
+    from urllib.parse import urlparse
+
+    hostname = urlparse(ox.settings.overpass_url).hostname or "overpass-api.de"
+    return _pick_reachable_ip(hostname) is not None

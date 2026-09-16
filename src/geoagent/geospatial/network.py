@@ -25,17 +25,34 @@ def haversine_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
 # Some public Overpass mirrors are served by multiple backend IPs whose
 # reachability from a given network can flap within seconds (see
 # geoagent.config's DNS re-probing) — retrying gives a fresh DNS probe another
-# chance to land on a working IP. A bad-IP failure is sometimes a fast
-# "connection refused", but can also be a slow hang up to
-# ox.settings.requests_timeout (30s, see geoagent.config) — with that
-# timeout kept short specifically so this retry budget stays bounded (worst
-# case here: 3 * 30s + 2 * 3s ~= 96s, not the ~9 minutes it would be at
-# OSMnx's much longer default).
+# chance to land on a working IP. Worst case if attempts DO connect but the
+# query is genuinely slow to compute server-side: 3 * 30s (requests_timeout)
+# + 2 * 3s ~= 96s — nowhere near the ~9 minutes this would take at OSMnx's
+# much longer default.
+#
+# That per-attempt 30s only bounds the *query* request though. OSMnx also
+# does its own `/status` check before every query to respect the server's
+# rate limit (see ox.settings.overpass_rate_limit), and when THAT can't
+# connect, it doesn't fail fast — it falls back to a hardcoded 60s
+# "default_pause" sleep before attempting the query anyway. Against a
+# genuinely unreachable Overpass, that alone adds up to 60s *per attempt* on
+# top of the numbers above, turning a dead mirror into several minutes. The
+# reachability check just below exists specifically to skip that whole
+# sequence: it fails in a couple of seconds instead of letting OSMnx discover
+# unreachability the slow way, up to 3 times over.
 _MAX_FETCH_ATTEMPTS = 3
 _RETRY_DELAY_S = 3.0
 
 
 def _fetch_with_retry(fetch_fn: Callable[[], nx.MultiDiGraph], error_prefix: str) -> nx.MultiDiGraph:
+    from geoagent.config import is_overpass_reachable
+
+    if not is_overpass_reachable():
+        raise NetworkFetchError(
+            f"{error_prefix}: the Overpass street-data server appears to be unreachable "
+            "from this network right now. Try again in a bit."
+        )
+
     last_exc: Exception | None = None
     for attempt in range(_MAX_FETCH_ATTEMPTS):
         try:
