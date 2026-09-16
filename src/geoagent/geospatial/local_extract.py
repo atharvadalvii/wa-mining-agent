@@ -151,16 +151,25 @@ class LocalNetworkStore:
 default_store = LocalNetworkStore()
 
 
-def warm_up() -> None:
-    """Pre-loads every extracted network_type's tables into memory.
+def warm_up(network_types: tuple[str, ...] = ("drive",)) -> None:
+    """Pre-loads the given network_type(s)' tables into memory (default: just
+    "drive", the most commonly used one).
 
-    Loading a network_type's parquet tables the first time (~15-30s for the
-    larger walk/bike tables) used to happen lazily on whichever query hit it
-    first — a real UX problem, since that meant an unpredictable, unexplained
-    slow response buried in the middle of a conversation instead of a single
-    predictable wait at startup. Call this once, right after configure_osmnx,
-    from each entrypoint (cli.py, dashboard.py, gradio_app.py, api.py).
+    Loading a network_type's parquet tables the first time used to happen
+    lazily on whichever query hit it first — a real UX problem, since that
+    meant an unpredictable, unexplained slow response buried in the middle of
+    a conversation instead of a single predictable wait at startup. Call this
+    once, right after configure_osmnx, from each entrypoint (cli.py,
+    dashboard.py, gradio_app.py, api.py's lifespan).
+
+    Only "drive" is pre-loaded by default rather than every supported type:
+    walk/bike's tables are larger (pedestrian/cycle ways vastly outnumber
+    drivable roads) and loading all three made startup itself slow enough to
+    trade one UX problem for another. Isochrone's first "walk" query (its
+    default network_type) still pays a one-time lazy-load cost — a real but
+    lesser tradeoff, since routing is used far more often than isochrones in
+    practice.
     """
-    for network_type in SUPPORTED_NETWORK_TYPES:
+    for network_type in network_types:
         if is_extracted(network_type):
             default_store._load_tables(network_type)
