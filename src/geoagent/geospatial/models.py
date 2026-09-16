@@ -127,7 +127,7 @@ class MiningDepositsResult:
             )
 
         lines = [
-            f"{s.get('site_title', '?')} — {s.get('commodity', '?')}, "
+            f"{s.get('site_title', '?')} — {s.get('target_com') or s.get('commodity', '?')}, "
             f"{s.get('site_type_', '?')} ({s.get('site_stage', '?')})"
             for s in self.sites[:_MAX_LISTED]
         ]
@@ -152,7 +152,8 @@ class MiningDepositsResult:
                     "properties": {
                         "kind": "mining_deposit",
                         "site_title": site.get("site_title"),
-                        "commodity": site.get("commodity"),
+                        "commodity": site.get("target_com") or site.get("commodity"),
+                        "commodity_category": site.get("commodity"),
                         "site_type": site.get("site_type_"),
                         "site_stage": site.get("site_stage"),
                     },

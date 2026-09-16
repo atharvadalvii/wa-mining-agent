@@ -72,6 +72,59 @@ def test_find_mining_deposits_parses_results(mock_get):
 
 
 @patch("requests.get")
+def test_find_mining_deposits_commodity_filter_checks_target_com(mock_get):
+    # Regression test: MINEDEX's `commodity` field is a coarse category (nickel
+    # falls under "STEEL ALLOY METAL", gold under "PRECIOUS METAL") — the
+    # specific mineral name lives in `target_com`. Filtering on `commodity`
+    # alone silently returns zero results for most real mineral-name searches.
+    mock_get.side_effect = [_mock_response({"count": 0})]
+
+    find_mining_deposits("-20.3,118.5", commodity="nickel")
+
+    count_call_params = mock_get.call_args_list[0].kwargs["params"]
+    where = count_call_params["where"]
+    assert "TARGET_COM" in where.upper()
+    assert "NICKEL" in where.upper()
+
+
+@patch("requests.get")
+def test_find_mining_deposits_prefers_target_com_for_display(mock_get):
+    # A site whose broad `commodity` category ("STEEL ALLOY METAL") differs
+    # from its specific `target_com` ("NICKEL") should display the specific
+    # name — that's what a user searching "nickel" actually wants to see.
+    mock_get.side_effect = [
+        _mock_response({"count": 1}),
+        _mock_response(
+            {
+                "features": [
+                    {
+                        "attributes": {
+                            "site_title": "Otter-Juan",
+                            "commodity": "STEEL ALLOY METAL",
+                            "target_com": "NICKEL",
+                            "site_type_": "Mine",
+                            "site_stage": "Care and Maintenance",
+                            "latitude": -31.2,
+                            "longitude": 121.6,
+                        }
+                    }
+                ]
+            }
+        ),
+    ]
+
+    result = find_mining_deposits("-20.3,118.5", commodity="nickel")
+
+    text = result.to_tool_text()
+    assert "NICKEL" in text
+    assert "STEEL ALLOY METAL" not in text
+
+    features = result.to_geojson_features()
+    assert features[0]["properties"]["commodity"] == "NICKEL"
+    assert features[0]["properties"]["commodity_category"] == "STEEL ALLOY METAL"
+
+
+@patch("requests.get")
 def test_find_mining_deposits_no_results(mock_get):
     mock_get.side_effect = [_mock_response({"count": 0})]
 

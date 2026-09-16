@@ -99,7 +99,15 @@ def find_mining_deposits(
 
     clauses = ["1=1"]
     if commodity:
-        clauses.append(f"UPPER(commodity) LIKE '%{_safe_literal(commodity).upper()}%'")
+        # `commodity` is a coarse category (e.g. nickel falls under "STEEL ALLOY
+        # METAL", gold under "PRECIOUS METAL") — matching only that field means a
+        # search for the actual mineral name silently returns nothing for most
+        # minerals (iron is a rare exception, where the category and the mineral
+        # name coincide). `target_com` holds the specific intended commodity (e.g.
+        # "NICKEL", "GOLD") and is what a mineral-name search should really match;
+        # OR it with `commodity` too so category-level searches still work.
+        literal = _safe_literal(commodity).upper()
+        clauses.append(f"(UPPER(target_com) LIKE '%{literal}%' OR UPPER(commodity) LIKE '%{literal}%')")
     if site_type:
         clauses.append(f"UPPER(site_type_) = '{_safe_literal(site_type).upper()}'")
     where = " AND ".join(clauses)
@@ -110,7 +118,7 @@ def find_mining_deposits(
         lat,
         lon,
         radius_km,
-        ["site_title", "commodity", "site_type_", "site_stage", "latitude", "longitude"],
+        ["site_title", "commodity", "target_com", "site_type_", "site_stage", "latitude", "longitude"],
     )
     return MiningDepositsResult(
         location_label=label,
