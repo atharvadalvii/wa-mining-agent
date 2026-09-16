@@ -35,9 +35,13 @@ dashboard = [
 gradio = [
     "gradio",
 ]
+local-wa = [
+    "pyrosm",
+]
 
 [project.scripts]
 geoagent = "geoagent.cli:main"
+geoagent-setup-wa = "geoagent.setup_local_wa:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

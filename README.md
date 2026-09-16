@@ -179,6 +179,29 @@ Both auto-fit the map to whatever was just computed (a route line, isochrone
 polygon, or mining deposit points) using the same GeoJSON-collection mechanism the
 API uses.
 
+## Local WA street network (offline routing)
+
+Routing/isochrone queries normally fetch street data live from the public Overpass
+API, which can be slow or unreliable (some networks route to backend IPs that flap
+between working and unreachable within seconds, not hours). For Western Australia —
+where this project's own use cases concentrate — you can pre-download a WA-only OSM
+extract once and route entirely offline afterward, with no per-query network
+dependency:
+
+```bash
+pip install -e ".[dev,local-wa]"
+python -m geoagent.setup_local_wa   # one-time, ~5-10 min, downloads ~110MB + builds ~1.6GB of local cache
+```
+
+This downloads a [Geofabrik](https://download.geofabrik.de/australia-oceania/australia.html)
+WA extract and pre-extracts driving/walking/cycling networks into `.cache/local_network/`
+(as parquet node/edge tables — not a single prebuilt graph, since building one graph for
+the whole state is too slow; a bounding box is filtered from the tables and turned into a
+small graph per query instead, which is sub-second once the tables are loaded). Once set
+up, any `shortest_route`/`isochrone` query whose points fall within WA automatically uses
+this local data — no code changes needed, and non-WA queries (e.g. NYC) keep using live
+Overpass as before. Skip this entirely if you don't need WA-specific offline routing.
+
 ## Configuration
 
 All settings are read from environment variables (via `.env`):
@@ -215,6 +238,7 @@ src/geoagent/
 ├── api.py                # FastAPI microservice entrypoint
 ├── dashboard.py           # Streamlit chat + live map entrypoint
 ├── gradio_app.py          # Gradio chat + live map entrypoint
+├── setup_local_wa.py      # one-time WA offline-extract setup script
 ├── agent/
 │   ├── loop.py            # OpenAI tool-calling loop
 │   ├── conversation.py    # message history state
@@ -231,6 +255,7 @@ src/geoagent/
     ├── isochrone.py        # reachable-area computation
     ├── geocode.py          # place name / "lat,lon" resolution
     ├── mapping.py          # folium HTML map export
+    ├── local_extract.py    # offline WA street network (see "Local WA street network" above)
     ├── wa_mining.py        # DMIRS ArcGIS REST queries
     └── models.py           # result dataclasses + their model-facing text/GeoJSON summaries
 ```

@@ -99,6 +99,52 @@ def _add_speeds_and_times(graph: nx.MultiDiGraph, network_type: str) -> nx.Multi
     return graph
 
 
+_METERS_PER_DEGREE_LAT = 111_320.0
+
+
+# The local extract is served from an in-memory table with sub-second bbox
+# queries, unlike a live Overpass fetch, so there's no real cost to padding
+# its query generously — do so, since a tight bbox (sized for the live-fetch
+# path, which does need to stay small) can otherwise strand the road segment
+# nearest a query point in a way retain_all=True alone doesn't fully fix if
+# the connecting road to the rest of the network exits and re-enters the box.
+_LOCAL_EXTRACT_PADDING_M = 3000.0
+
+
+def _try_local_extract_for_bbox(
+    north: float, south: float, east: float, west: float, network_type: str
+) -> nx.MultiDiGraph | None:
+    """Returns a ready-to-use graph from the local WA extract if the bbox is
+    covered and that network_type has been extracted, else None (meaning: fall
+    back to a live fetch)."""
+    from geoagent.geospatial import local_extract
+
+    if network_type not in local_extract.SUPPORTED_NETWORK_TYPES:
+        return None
+    if not local_extract.is_extracted(network_type):
+        return None
+    if not local_extract.bbox_within_wa(north, south, east, west):
+        return None
+
+    mean_lat_rad = math.radians((north + south) / 2)
+    lat_pad_deg = _LOCAL_EXTRACT_PADDING_M / _METERS_PER_DEGREE_LAT
+    lon_pad_deg = _LOCAL_EXTRACT_PADDING_M / (_METERS_PER_DEGREE_LAT * max(math.cos(mean_lat_rad), 0.01))
+    graph = local_extract.default_store.get_subgraph(
+        north + lat_pad_deg, south - lat_pad_deg, east + lon_pad_deg, west - lon_pad_deg, network_type
+    )
+    return _add_speeds_and_times(graph, network_type)
+
+
+def _try_local_extract_for_point(
+    lat: float, lon: float, radius_m: float, network_type: str
+) -> nx.MultiDiGraph | None:
+    lat_pad_deg = radius_m / _METERS_PER_DEGREE_LAT
+    lon_pad_deg = radius_m / (_METERS_PER_DEGREE_LAT * max(math.cos(math.radians(lat)), 0.01))
+    return _try_local_extract_for_bbox(
+        lat + lat_pad_deg, lat - lat_pad_deg, lon + lon_pad_deg, lon - lon_pad_deg, network_type
+    )
+
+
 class NetworkCache:
     """In-process, session-lifetime memoization on top of OSMnx's own disk cache.
 
@@ -123,7 +169,10 @@ class NetworkCache:
     ) -> nx.MultiDiGraph:
         key = (round(lat, 4), round(lon, 4), round(radius_m, -1), network_type)
         if key not in self._by_point:
-            self._by_point[key] = fetch_network_for_point(lat, lon, radius_m, network_type)
+            local = _try_local_extract_for_point(lat, lon, radius_m, network_type)
+            self._by_point[key] = (
+                local if local is not None else fetch_network_for_point(lat, lon, radius_m, network_type)
+            )
         return self._by_point[key]
 
     def get_for_bbox(
@@ -131,7 +180,10 @@ class NetworkCache:
     ) -> nx.MultiDiGraph:
         key = (round(north, 4), round(south, 4), round(east, 4), round(west, 4), network_type)
         if key not in self._by_bbox:
-            self._by_bbox[key] = fetch_network_for_bbox(north, south, east, west, network_type)
+            local = _try_local_extract_for_bbox(north, south, east, west, network_type)
+            self._by_bbox[key] = (
+                local if local is not None else fetch_network_for_bbox(north, south, east, west, network_type)
+            )
         return self._by_bbox[key]
 
 
