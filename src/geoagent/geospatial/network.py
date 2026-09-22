@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import threading
 import time
 from typing import Callable
 
@@ -25,23 +26,72 @@ def haversine_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
 # Some public Overpass mirrors are served by multiple backend IPs whose
 # reachability from a given network can flap within seconds (see
 # geoagent.config's DNS re-probing) — retrying gives a fresh DNS probe another
-# chance to land on a working IP. Worst case if attempts DO connect but the
-# query is genuinely slow to compute server-side: 3 * 30s (requests_timeout)
-# + 2 * 3s ~= 96s — nowhere near the ~9 minutes this would take at OSMnx's
-# much longer default.
-#
-# That per-attempt 30s only bounds the *query* request though. OSMnx also
-# does its own `/status` check before every query to respect the server's
-# rate limit (see ox.settings.overpass_rate_limit), and when THAT can't
-# connect, it doesn't fail fast — it falls back to a hardcoded 60s
-# "default_pause" sleep before attempting the query anyway. Against a
-# genuinely unreachable Overpass, that alone adds up to 60s *per attempt* on
-# top of the numbers above, turning a dead mirror into several minutes. The
-# reachability check just below exists specifically to skip that whole
-# sequence: it fails in a couple of seconds instead of letting OSMnx discover
+# chance to land on a working IP. That per-attempt 30s (ox.settings.
+# requests_timeout) only bounds a single HTTP request though, which turns out
+# not to be the whole story: OSMnx also does its own `/status` check before
+# every query to respect the server's rate limit, and when THAT can't
+# connect, it falls back to a hardcoded 60s "default_pause" sleep before
+# attempting the query anyway — against a genuinely unreachable Overpass, the
+# reachability check below exists specifically to skip that whole sequence,
+# failing in a couple of seconds instead of letting OSMnx discover
 # unreachability the slow way, up to 3 times over.
-_MAX_FETCH_ATTEMPTS = 3
+#
+# None of that covers a *reachable*-but-rate-limited server, though: when
+# Overpass responds 429/504, osmnx._overpass._overpass_request doesn't back
+# off and give up — it recursively retries itself, sleeping a hardcoded 55s
+# each time, with NO retry cap at all (see its source). Observed in practice:
+# a single fetch attempt took 851s this way once our own repeated testing
+# tripped the public server's rate limit — and a rate limit, unlike a flaky
+# IP, won't usually clear in the few seconds between our own retries, so
+# _MAX_FETCH_ATTEMPTS is kept at 2 rather than 3 here specifically to keep
+# the worst case tolerable for a live web request (2 * 40s + 1 * 3s ~= 83s)
+# rather than retrying a condition retries don't fix. Since requests_timeout
+# only bounds one HTTP call, not this sleep-then-recurse loop, the fetch has
+# to run under an independent hard wall-clock cap enforced from *outside*
+# OSMnx — a background thread we simply stop waiting on past the deadline,
+# since we have no way to cancel OSMnx's own retry loop from in here. The
+# thread (and whatever OSMnx is doing inside it) keeps running orphaned after
+# a timeout; harmless, and if it does eventually succeed, the result lands in
+# OSMnx's own disk cache for next time.
+_MAX_FETCH_ATTEMPTS = 2
 _RETRY_DELAY_S = 3.0
+_HARD_FETCH_TIMEOUT_S = 40.0
+
+
+def _run_with_hard_timeout(fetch_fn: Callable[[], nx.MultiDiGraph], timeout_s: float):
+    """Runs fetch_fn on a daemon thread and waits up to timeout_s for it.
+
+    Deliberately NOT a concurrent.futures.ThreadPoolExecutor: its worker
+    threads are non-daemon, and CPython registers an atexit hook that joins
+    every outstanding submitted task before the interpreter is allowed to
+    exit — verified empirically that this means an orphaned, still-running
+    fetch (exactly what a timeout here leaves behind) would silently block
+    the whole process from shutting down for however long OSMnx's internal
+    retry loop keeps going, which can be effectively unbounded (see
+    _fetch_with_retry's docstring/comment). A plain daemon thread has no such
+    join-on-exit behavior — confirmed empirically too — so a timed-out fetch
+    can be safely left running in the background without holding up a normal
+    process exit (Ctrl+C, a Streamlit/FastAPI server restart, etc).
+    """
+    result: dict[str, object] = {}
+
+    def _target() -> None:
+        try:
+            result["value"] = fetch_fn()
+        except Exception as exc:  # noqa: BLE001 - re-raised on the calling thread below
+            result["error"] = exc
+
+    thread = threading.Thread(target=_target, daemon=True, name="geoagent-fetch")
+    thread.start()
+    thread.join(timeout=timeout_s)
+
+    if thread.is_alive():
+        raise TimeoutError(
+            f"no response after {timeout_s:.0f}s (the server may be rate-limiting or overloaded)"
+        )
+    if "error" in result:
+        raise result["error"]  # type: ignore[misc]
+    return result["value"]
 
 
 def _fetch_with_retry(fetch_fn: Callable[[], nx.MultiDiGraph], error_prefix: str) -> nx.MultiDiGraph:
@@ -56,11 +106,11 @@ def _fetch_with_retry(fetch_fn: Callable[[], nx.MultiDiGraph], error_prefix: str
     last_exc: Exception | None = None
     for attempt in range(_MAX_FETCH_ATTEMPTS):
         try:
-            return fetch_fn()
+            return _run_with_hard_timeout(fetch_fn, _HARD_FETCH_TIMEOUT_S)
         except Exception as exc:
             last_exc = exc
-            if attempt < _MAX_FETCH_ATTEMPTS - 1:
-                time.sleep(_RETRY_DELAY_S)
+        if attempt < _MAX_FETCH_ATTEMPTS - 1:
+            time.sleep(_RETRY_DELAY_S)
     raise NetworkFetchError(f"{error_prefix}: {last_exc}") from last_exc
 
 

@@ -47,14 +47,14 @@ def test_fetch_with_retry_retries_transient_failures_then_succeeds(monkeypatch):
 
     def fetch_fn():
         attempts["n"] += 1
-        if attempts["n"] < 3:
+        if attempts["n"] < 2:
             raise RuntimeError("transient")
         return graph
 
     result = _fetch_with_retry(fetch_fn, "Could not fetch")
 
     assert result is graph
-    assert attempts["n"] == 3
+    assert attempts["n"] == 2
 
 
 def test_fetch_with_retry_raises_after_max_attempts(monkeypatch):
@@ -69,4 +69,37 @@ def test_fetch_with_retry_raises_after_max_attempts(monkeypatch):
     with pytest.raises(NetworkFetchError, match="Could not fetch"):
         _fetch_with_retry(fetch_fn, "Could not fetch")
 
-    assert attempts["n"] == 3
+    assert attempts["n"] == 2
+
+
+def test_fetch_with_retry_bounds_a_hanging_fetch(monkeypatch):
+    # Regression test for a real, more severe bug than plain unreachability:
+    # osmnx._overpass._overpass_request recursively retries FOREVER (sleeping
+    # 55s each time, no cap) whenever Overpass responds 429/504 — observed in
+    # practice to turn a single fetch into 851s once our own testing tripped
+    # the public server's rate limit. Since that retry-forever loop lives
+    # inside OSMnx and isn't bounded by requests_timeout, fetch_fn must be run
+    # under an independent hard wall-clock cap that gives up on it rather than
+    # ever actually waiting that long.
+    monkeypatch.setattr("geoagent.config.is_overpass_reachable", lambda: True)
+    monkeypatch.setattr("geoagent.geospatial.network.time.sleep", lambda seconds: None)
+    monkeypatch.setattr("geoagent.geospatial.network._HARD_FETCH_TIMEOUT_S", 0.05)
+
+    def fetch_fn():
+        import threading
+
+        # Simulates OSMnx's own unbounded internal retry loop. threading.Event
+        # rather than time.sleep(): this test mocks
+        # geoagent.geospatial.network.time.sleep to skip the real retry-delay
+        # wait between attempts — but `network.time` IS the process-wide time
+        # module (not a copy), so that mock would silently make a time.sleep
+        # call here a no-op too, defeating the point of simulating a hang.
+        # Kept short (not e.g. 10s) just to keep this test itself fast — the
+        # orphaned daemon thread this leaves running doesn't block
+        # process/test-suite exit either way (see _run_with_hard_timeout's
+        # docstring).
+        threading.Event().wait(0.3)
+        return _make_graph()
+
+    with pytest.raises(NetworkFetchError, match="Could not fetch"):
+        _fetch_with_retry(fetch_fn, "Could not fetch")
