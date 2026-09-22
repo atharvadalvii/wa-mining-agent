@@ -1,0 +1,10 @@
+# For Streamlit Community Cloud: installs the geoagent package itself
+# (editable, from pyproject.toml) plus its `dashboard` extra (streamlit,
+# streamlit-folium). Deliberately excludes the `local-wa` extra (pyrosm) —
+# the offline WA street-network extract it needs is gitignored (843MB
+# processed cache from a 109MB source file) and isn't part of this repo, so
+# there's nothing for it to load on a fresh deploy. The app already handles
+# this gracefully: local_extract.warm_up()/is_extracted() no-op when the
+# extract isn't present, and routing/isochrone tools fall back to a live
+# Overpass fetch instead (see geospatial/network.py).
+-e .[dashboard]

@@ -9,6 +9,8 @@ Run with: streamlit run src/geoagent/dashboard.py
 
 from __future__ import annotations
 
+import os
+
 import folium
 import streamlit as st
 from streamlit_folium import st_folium
@@ -27,8 +29,26 @@ import geoagent.tools.wa_mining  # noqa: F401
 st.set_page_config(page_title="geoagent", layout="wide")
 
 
+def _bridge_streamlit_secrets_to_env() -> None:
+    """On Streamlit Community Cloud, secrets set in the app's dashboard only
+    ever arrive via `st.secrets` — there is no .env file and they are NOT
+    injected into os.environ automatically. `load_settings()` below reads
+    plain env vars (so it stays usable from the CLI/API/Gradio front ends,
+    which know nothing about Streamlit), so mirror any secrets across before
+    calling it. A missing secrets.toml (the normal case for local dev, which
+    uses .env instead) makes st.secrets behave like an empty mapping rather
+    than raising.
+    """
+    try:
+        for key, value in st.secrets.items():
+            os.environ.setdefault(key, str(value))
+    except Exception:
+        pass
+
+
 @st.cache_resource
 def _setup():
+    _bridge_streamlit_secrets_to_env()
     settings = load_settings()
     configure_osmnx(
         settings.cache_dir,
