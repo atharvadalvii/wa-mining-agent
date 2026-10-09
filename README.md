@@ -3,10 +3,10 @@
 [![Tests](https://github.com/atharvadalvii/geodev/actions/workflows/tests.yml/badge.svg)](https://github.com/atharvadalvii/geodev/actions/workflows/tests.yml)
 
 A natural-language assistant for **Western Australian mining and exploration**. Ask in
-plain English — "pending prospecting licences near Coolgardie", "gold deposits near
-Kalgoorlie", "how far can a crew drive from Leonora in an hour?" — and an LLM calls out
+plain English ("pending prospecting licences near Coolgardie", "gold deposits near
+Kalgoorlie", "how far can a crew drive from Leonora in an hour?") and an LLM calls out
 to the right data sources and shows the results on a map. It uses OpenAI's native tool
-(function) calling directly — no agent framework involved — with CLI, REST API and web
+(function) calling directly, with no agent framework, and has CLI, REST API and web
 dashboard front ends over the same core. Coverage is Western Australia only.
 
 **Quick start** (details under [Setup](#setup)):
@@ -19,15 +19,15 @@ streamlit run src/geoagent/dashboard.py                      # chat + live map
 **Mining data** comes direct from DMIRS's public, unauthenticated ArcGIS REST service:
 
 - mines, mineral deposits, and prospects near a place (`find_mining_deposits`, from
-  the MINEDEX dataset) — filterable by commodity and/or site type
-- mining tenements — legal titles like mining leases and exploration licences — near
-  a place (`find_mining_tenements`, from the TENGRAPH system) — filterable by tenement
+  the MINEDEX dataset), filterable by commodity and/or site type
+- mining tenements (legal titles like mining leases and exploration licences) near
+  a place (`find_mining_tenements`, from the TENGRAPH system), filterable by tenement
   type and/or status (live/pending only; historical tenements aren't covered). Tenement
   boundaries are drawn on the map.
 
 These two datasets aren't cross-referenced (tenements carry no commodity data, and
 deposits carry no legal title info), so a query like "iron ore leases near X" triggers
-both tools and the agent presents them as separate results — with `--debug` on, you can
+both tools and the agent presents them as separate results. With `--debug` on, you can
 see both real, live tool calls and their raw results:
 
 ![WA mining tools debug output](assets/mining-debug-screenshot.jpg)
@@ -36,7 +36,7 @@ see both real, live tool calls and their raw results:
 
 ![WA mining tools agent reply](assets/mining-result-screenshot.jpg)
 
-**Getting around** supports the mining lookups — for example the route from a town to a
+**Getting around** supports the mining lookups, for example the route from a town to a
 mine site, or the area a crew can reach in a given time. Built on OSMnx/GeoPandas street
 networks (an offline WA extract, see below):
 
@@ -55,15 +55,15 @@ tools the agent calls (real DMIRS data and the local WA street network), run by
 `python scripts/generate_readme_maps.py`. **Click a map to open the interactive
 version** (pan, zoom and hover for details).
 
-**1. Reachable area — "How far can a crew drive from Leonora in 60 minutes?"**
+**1. Reachable area: "How far can a crew drive from Leonora in 60 minutes?"**
 
 [![60-minute drive area from Leonora](assets/example-isochrone.png)](https://htmlpreview.github.io/?https://github.com/atharvadalvii/geodev/blob/main/assets/maps/example-isochrone.html)
 
-**2. Mines in an area — "Gold deposits within 25 km of Kalgoorlie"**
+**2. Mines in an area: "Gold deposits within 25 km of Kalgoorlie"**
 
 [![Gold deposits near Kalgoorlie](assets/example-deposits.png)](https://htmlpreview.github.io/?https://github.com/atharvadalvii/geodev/blob/main/assets/maps/example-deposits.html)
 
-**3. Shortest path — "Fastest driving route from Kalgoorlie to Kambalda"**
+**3. Shortest path: "Fastest driving route from Kalgoorlie to Kambalda"**
 
 [![Fastest drive from Kalgoorlie to Kambalda](assets/example-route.png)](https://htmlpreview.github.io/?https://github.com/atharvadalvii/geodev/blob/main/assets/maps/example-route.html)
 
@@ -146,11 +146,11 @@ presents them as two unlinked results.
 
 `geospatial/` holds pure domain logic (OSMnx/NetworkX/GeoPandas/DMIRS calls) with no
 knowledge of OpenAI. `tools/` adapts that into OpenAI tool schemas and lossy,
-model-readable text summaries — full data (route coordinates, isochrone polygons)
+model-readable text summaries. Full data (route coordinates, isochrone polygons)
 stays out of the LLM's context but is retained for map export and, via
 `tools/geo_context.py`'s context-local collector, for the API's and dashboard's
 GeoJSON. `agent/` only talks to the tool registry's generic interface, so it has no
-dependency on OSMnx, GeoPandas, or DMIRS at all — `cli.py`, `api.py`, `dashboard.py`,
+dependency on OSMnx, GeoPandas, or DMIRS at all. `cli.py`, `api.py`, `dashboard.py`,
 and `gradio_app.py` are four thin, swappable front ends over the same
 `agent/`/`tools/` core.
 
@@ -162,7 +162,7 @@ and `gradio_app.py` are four thin, swappable front ends over the same
   indirection without adding capability, and it keeps every step debuggable.
 - **The model sees summaries, not geometry.** Tools return short, lossy text (distance,
   duration, counts). Full route coordinates and isochrone polygons never enter the LLM
-  context — they are held in a context-local collector (`tools/geo_context.py`) and used
+  context. They are held in a context-local collector (`tools/geo_context.py`) and used
   for map export and the API/dashboard GeoJSON. This bounds token cost and keeps the
   model from reasoning over (or hallucinating) raw coordinates.
 - **Domain logic is separate from the LLM.** `geospatial/` has no OpenAI dependency and
@@ -226,8 +226,8 @@ you> how far can I drive from Leonora in 60 minutes?
 
 Flags:
 
-- `--debug` — echo tool calls/results to stderr as they happen
-- `--no-cache` — disable OSMnx's disk cache for this run (forces fresh OSM fetches)
+- `--debug`: echo tool calls/results to stderr as they happen
+- `--no-cache`: disable OSMnx's disk cache for this run (forces fresh OSM fetches)
 
 Type `exit`, `quit`, or Ctrl-D to leave the REPL.
 
@@ -241,15 +241,15 @@ pip install -e ".[dev,api]"
 uvicorn geoagent.api:app --reload
 ```
 
-- `GET /health` — liveness check
-- `POST /query` — `{"message": str, "history": [...]}` (both required except
+- `GET /health`: liveness check
+- `POST /query`: `{"message": str, "history": [...]}` (both required except
   `history`, which defaults to `[]`) → `{"reply": str, "history": [...], "geojson": {...}}`
 
 The API is **stateless**: it holds no server-side session, so a multi-turn
 conversation is continued by passing back the `history` array from the previous
 response as the next request's `history`. `geojson` is a `FeatureCollection` built
 from whatever routes/isochrones/mining deposits were actually computed during that
-turn's tool calls — a `LineString` per route, a `Polygon` per isochrone, a `Point`
+turn's tool calls: a `LineString` per route, a `Polygon` per isochrone, a `Point`
 per mining deposit, and a `Polygon` per mining tenement (boundary from the DMIRS
 service).
 
@@ -261,7 +261,7 @@ curl -s -X POST localhost:8000/query \
 
 ## Dashboards
 
-Two dashboards — chat + a live map — are available, both thin front ends over the
+Two dashboards (chat plus a live map) are available, both thin front ends over the
 same agent (no HTTP call to `api.py` involved; each imports `agent`/`tools`
 directly, like the CLI does). Pick whichever fits your stack.
 
@@ -281,7 +281,7 @@ python -m geoagent.gradio_app
 
 Gradio has no native Leaflet/folium component, so its map is embedded as raw HTML
 (`gr.HTML`) rather than the interactive `streamlit-folium` widget the Streamlit
-version uses — functionally equivalent, slightly less native-feeling.
+version uses. It is functionally equivalent, but slightly less native-feeling.
 
 Both auto-fit the map to whatever was just computed (a route line, isochrone
 polygon, or mining deposit points) using the same GeoJSON-collection mechanism the
@@ -302,11 +302,11 @@ python -m geoagent.setup_local_wa   # one-time, ~5-10 min, downloads ~110MB + bu
 
 This downloads a [Geofabrik](https://download.geofabrik.de/australia-oceania/australia.html)
 WA extract and pre-extracts driving/walking/cycling networks into `.cache/local_network/`
-(as parquet node/edge tables — not a single prebuilt graph, since building one graph for
+(as parquet node/edge tables, not a single prebuilt graph, since building one graph for
 the whole state is too slow; a bounding box is filtered from the tables and turned into a
 small graph per query instead, which is sub-second once the tables are loaded). Once set
 up, any `shortest_route`/`isochrone` query whose points fall within WA automatically uses
-this local data — no code changes needed. Without it, routing falls back to live
+this local data, with no code changes needed. Without it, routing falls back to live
 Overpass (slower and less reliable).
 
 ## Configuration
@@ -324,7 +324,7 @@ All settings are read from environment variables (via `.env`):
 | `GEOAGENT_OVERPASS_RATE_LIMIT` | `true` | Set `false` to disable OSMnx's Overpass rate-limit slot check |
 
 The last two are only needed if your network can't reach OSMnx's default Overpass
-mirror (`overpass-api.de`) — leave them unset to get OSMnx's normal, usage-policy-
+mirror (`overpass-api.de`). Leave them unset to get OSMnx's normal, usage-policy-
 respecting behavior. If routing/isochrone tool calls fail with connection errors,
 try setting `GEOAGENT_OVERPASS_URL=https://overpass.kumi.systems/api` and
 `GEOAGENT_OVERPASS_RATE_LIMIT=false`.
@@ -377,9 +377,9 @@ pytest -m integration  # also hits real OSM/Overpass data
 
 The unit suite (58 tests, run on every push by GitHub Actions) mocks the OpenAI client and
 all external services, so it runs offline in a few seconds. Several tests are regression
-tests for failures found in real use — for example drive isochrones breaking where OSM has
+tests for failures found in real use (for example drive isochrones breaking where OSM has
 no speed limits, a route destination stranded in a disconnected piece of the map, and
-geocoding to the shire instead of the town — each written to fail without its fix.
+geocoding to the shire instead of the town), each written to fail without its fix.
 Integration tests hit real OSM data and are excluded by default.
 
 ## Project layout
@@ -418,4 +418,4 @@ example maps) and `scripts/generate_readme_maps.py` (regenerates the example map
 live tools).
 
 To add a new capability (e.g. POI search), add a `geospatial/<feature>.py` module and
-a `tools/<feature>.py` that registers its own tool specs — no changes needed to `agent/`.
+a `tools/<feature>.py` that registers its own tool specs, with no changes needed to `agent/`.
