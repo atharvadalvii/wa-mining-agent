@@ -9,6 +9,8 @@ to the right data sources and shows the results on a map. It uses OpenAI's nativ
 (function) calling directly, with no agent framework, and has CLI, REST API and web
 dashboard front ends over the same core. Coverage is Western Australia only.
 
+The Python package and command-line tool are named `geoagent`.
+
 **Quick start** (details under [Setup](#setup)):
 
 ```bash
