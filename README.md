@@ -167,8 +167,8 @@ conversation is continued by passing back the `history` array from the previous
 response as the next request's `history`. `geojson` is a `FeatureCollection` built
 from whatever routes/isochrones/mining deposits were actually computed during that
 turn's tool calls — a `LineString` per route, a `Polygon` per isochrone, a `Point`
-per mining deposit. (Mining tenement polygons aren't included yet — that tool
-doesn't currently fetch geometry, only attributes.)
+per mining deposit, and a `Polygon` per mining tenement (boundary from the DMIRS
+service).
 
 ```bash
 curl -s -X POST localhost:8000/query \
@@ -276,7 +276,7 @@ try setting `GEOAGENT_OVERPASS_URL=https://overpass.kumi.systems/api` and
   declines general POI search and arbitrary spatial analysis.
 - Mining tools are Western Australia only. MINEDEX deposits and TENGRAPH tenements are
   not cross-referenced, results are capped at 25 features per query, and tenements cover
-  live/pending titles only. Tenement polygons are not yet included in the GeoJSON output.
+  live/pending titles only.
 - Routes are capped at 150 km between endpoints.
 - Where OSM has no `maxspeed` tags (common in remote WA), drive times use default speeds
   by road type (e.g. 100 km/h trunk, 30 km/h track), so travel times there are rough.

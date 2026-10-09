@@ -43,6 +43,8 @@ def _style(feature: dict) -> dict:
         return {"color": "#1a73e8", "weight": 5}
     if kind == "isochrone":
         return {"color": "#e8710a", "fillOpacity": 0.25}
+    if kind == "mining_tenement":
+        return {"color": "#7b1fa2", "weight": 2, "fillOpacity": 0.2}
     return {"color": "#d93025"}
 
 

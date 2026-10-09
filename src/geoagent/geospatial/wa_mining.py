@@ -57,8 +57,16 @@ def _get_json(url: str, params: dict) -> dict:
 
 
 def _query(
-    layer: int, where: str, lat: float, lon: float, radius_km: float, out_fields: list[str]
+    layer: int,
+    where: str,
+    lat: float,
+    lon: float,
+    radius_km: float,
+    out_fields: list[str],
+    with_geometry: bool = False,
 ) -> tuple[int, list[dict]]:
+    """With `with_geometry`, each returned dict also carries the feature's GeoJSON
+    geometry (WGS84) under "_geometry"."""
     url = f"{_BASE_URL}/{layer}/query"
     base_params = {
         "where": where,
@@ -76,16 +84,23 @@ def _query(
     if total == 0:
         return 0, []
 
-    detail_data = _get_json(
-        url,
-        {
-            **base_params,
-            "outFields": ",".join(out_fields),
-            "returnGeometry": "false",
-            "resultRecordCount": _MAX_FEATURES,
-        },
-    )
-    features = [f["attributes"] for f in detail_data.get("features", [])]
+    detail_params = {
+        **base_params,
+        "outFields": ",".join(out_fields),
+        "returnGeometry": "false",
+        "resultRecordCount": _MAX_FEATURES,
+    }
+    if with_geometry:
+        detail_params.update({"returnGeometry": "true", "outSR": 4326, "f": "geojson"})
+    detail_data = _get_json(url, detail_params)
+
+    if with_geometry:
+        features = [
+            {**(f.get("properties") or {}), "_geometry": f.get("geometry")}
+            for f in detail_data.get("features", [])
+        ]
+    else:
+        features = [f["attributes"] for f in detail_data.get("features", [])]
     return total, features
 
 
@@ -152,6 +167,7 @@ def find_mining_tenements(
         lon,
         radius_km,
         ["tenid", "type", "tenstatus", "holder1", "legal_area", "unit_of_me"],
+        with_geometry=True,
     )
     return MiningTenementsResult(
         location_label=label,

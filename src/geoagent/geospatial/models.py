@@ -181,6 +181,25 @@ class MiningTenementsResult:
     total_count: int
     tenements: list[dict] = field(default_factory=list)
 
+    def to_geojson_features(self) -> list[dict]:
+        """One polygon feature per fetched tenement (only those returned by the
+        capped detail query have geometry)."""
+        return [
+            {
+                "type": "Feature",
+                "geometry": t["_geometry"],
+                "properties": {
+                    "kind": "mining_tenement",
+                    "tenid": t.get("tenid"),
+                    "tenement_type": t.get("type"),
+                    "status": t.get("tenstatus"),
+                    "holder": t.get("holder1"),
+                },
+            }
+            for t in self.tenements
+            if t.get("_geometry")
+        ]
+
     def to_tool_text(self) -> str:
         filters = []
         if self.type_filter:

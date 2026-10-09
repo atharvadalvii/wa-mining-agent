@@ -88,12 +88,21 @@ with st.sidebar:
         checkpoint = len(st.session_state.conversation.messages)
         st.session_state.conversation.add_user(prompt)
         try:
+            tools_called: list[str] = []
             with st.spinner("Thinking..."):
                 with collect_geo_features() as features:
                     run_turn(
-                        client, settings.openai_model, st.session_state.conversation, settings.max_agent_turns
+                        client,
+                        settings.openai_model,
+                        st.session_state.conversation,
+                        settings.max_agent_turns,
+                        on_tool_call=lambda name, args: tools_called.append(name),
                     )
-                if features:
+                # The map always shows the latest query. If this turn ran any tool,
+                # replace the map with its results — even an empty set (nothing found,
+                # or an error), so a stale earlier result is never shown as the
+                # answer. A turn with no tool calls (e.g. "thanks") leaves it alone.
+                if tools_called:
                     st.session_state.features = features
         except Exception as exc:
             # Roll back to before this turn so a failed/interrupted request (e.g. a
@@ -112,6 +121,8 @@ def _style(feature: dict) -> dict:
         return {"color": "#1a73e8", "weight": 5}
     if kind == "isochrone":
         return {"color": "#e8710a", "fillOpacity": 0.25}
+    if kind == "mining_tenement":
+        return {"color": "#7b1fa2", "weight": 2, "fillOpacity": 0.2}
     return {"color": "#d93025"}
 
 

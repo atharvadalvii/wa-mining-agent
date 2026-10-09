@@ -30,6 +30,8 @@ def handle_find_mining_tenements(
     result = find_mining_tenements(
         location=location, radius_km=radius_km, tenement_type=tenement_type, status=status
     )
+    for feature in result.to_geojson_features():
+        record_geo_feature(feature)
     return result.to_tool_text()
 
 

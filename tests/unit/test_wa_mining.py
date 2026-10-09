@@ -134,6 +134,12 @@ def test_find_mining_deposits_no_results(mock_get):
     assert "No MINEDEX mining sites found" in result.to_tool_text()
 
 
+_TENEMENT_POLYGON = {
+    "type": "Polygon",
+    "coordinates": [[[118.5, -20.3], [118.6, -20.3], [118.6, -20.4], [118.5, -20.3]]],
+}
+
+
 @patch("requests.get")
 def test_find_mining_tenements_parses_results(mock_get):
     mock_get.side_effect = [
@@ -142,14 +148,16 @@ def test_find_mining_tenements_parses_results(mock_get):
             {
                 "features": [
                     {
-                        "attributes": {
+                        "type": "Feature",
+                        "geometry": _TENEMENT_POLYGON,
+                        "properties": {
                             "tenid": "M12/345",
                             "type": "MINING LEASE",
                             "tenstatus": "LIVE",
                             "holder1": "Test Co Pty Ltd",
                             "legal_area": 120.5,
                             "unit_of_me": "Ha",
-                        }
+                        },
                     }
                 ]
             }
@@ -162,6 +170,12 @@ def test_find_mining_tenements_parses_results(mock_get):
     text = result.to_tool_text()
     assert "M12/345" in text
     assert "Test Co Pty Ltd" in text
+    # The boundary polygon is kept so the dashboards can draw it on the map.
+    features = result.to_geojson_features()
+    assert len(features) == 1
+    assert features[0]["geometry"] == _TENEMENT_POLYGON
+    assert features[0]["properties"]["kind"] == "mining_tenement"
+    assert features[0]["properties"]["tenid"] == "M12/345"
 
 
 @patch("requests.get")
