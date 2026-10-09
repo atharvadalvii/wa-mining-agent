@@ -154,6 +154,23 @@ def fetch_network_for_bbox(
 # highway-type defaults), which is meaningless for walking/cycling.
 _NON_DRIVE_SPEEDS_KPH = {"walk": 5.0, "bike": 15.0}
 
+# Typical driving speeds (km/h) by OSM highway type, used where an edge has no
+# maxspeed tag. Required, not just nice to have: in remote areas (e.g. around
+# Leonora, WA) no edge has a maxspeed at all, and OSMnx's add_edge_speeds then
+# raises instead of imputing unless hwy_speeds/fallback are passed.
+_DRIVE_HWY_SPEEDS_KPH = {
+    "motorway": 110,
+    "trunk": 100,
+    "primary": 90,
+    "secondary": 80,
+    "tertiary": 70,
+    "unclassified": 60,
+    "residential": 50,
+    "service": 30,
+    "track": 30,
+}
+_DRIVE_FALLBACK_SPEED_KPH = 50
+
 
 def _add_speeds_and_times(graph: nx.MultiDiGraph, network_type: str) -> nx.MultiDiGraph:
     import osmnx as ox
@@ -165,7 +182,9 @@ def _add_speeds_and_times(graph: nx.MultiDiGraph, network_type: str) -> nx.Multi
             data["travel_time"] = data.get("length", 0.0) / speed_mps
         return graph
 
-    graph = ox.routing.add_edge_speeds(graph)
+    graph = ox.routing.add_edge_speeds(
+        graph, hwy_speeds=_DRIVE_HWY_SPEEDS_KPH, fallback=_DRIVE_FALLBACK_SPEED_KPH
+    )
     graph = ox.routing.add_edge_travel_times(graph)
     return graph
 

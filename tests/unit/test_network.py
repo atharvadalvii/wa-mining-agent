@@ -1,7 +1,7 @@
 import networkx as nx
 import pytest
 
-from geoagent.geospatial.network import NetworkFetchError, _fetch_with_retry
+from geoagent.geospatial.network import NetworkFetchError, _add_speeds_and_times, _fetch_with_retry
 
 
 def _make_graph() -> nx.MultiDiGraph:
@@ -103,3 +103,20 @@ def test_fetch_with_retry_bounds_a_hanging_fetch(monkeypatch):
 
     with pytest.raises(NetworkFetchError, match="Could not fetch"):
         _fetch_with_retry(fetch_fn, "Could not fetch")
+
+
+def test_add_speeds_and_times_handles_graph_with_no_maxspeed_tags():
+    # Regression test for a real bug: in remote areas (e.g. Leonora, WA) no edge
+    # has a maxspeed tag, and OSMnx's add_edge_speeds raised ValueError unless
+    # hwy_speeds/fallback were passed, breaking every drive isochrone there.
+    g = nx.MultiDiGraph(crs="EPSG:4326")
+    g.add_node(1, x=0.0, y=0.0)
+    g.add_node(2, x=0.01, y=0.0)
+    g.add_edge(1, 2, length=1000.0, highway="trunk")
+    g.add_edge(2, 1, length=1000.0, highway="some_unknown_type")
+
+    result = _add_speeds_and_times(g, "drive")
+
+    assert result[1][2][0]["speed_kph"] == 100
+    assert result[2][1][0]["speed_kph"] == 50
+    assert result[1][2][0]["travel_time"] == pytest.approx(36.0)

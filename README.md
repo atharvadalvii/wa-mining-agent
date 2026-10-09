@@ -2,7 +2,7 @@
 
 [![Tests](https://github.com/atharvadalvii/geodev/actions/workflows/tests.yml/badge.svg)](https://github.com/atharvadalvii/geodev/actions/workflows/tests.yml)
 
-A CLI geospatial AI agent that answers natural-language street-routing questions by
+A natural-language geospatial agent (CLI, REST API and web dashboard front ends) that answers street-routing and WA mining questions by
 having an LLM call out to OSMnx/GeoPandas-backed tools via OpenAI's native tool
 (function) calling — no agent framework involved.
 
@@ -83,6 +83,33 @@ GeoJSON. `agent/` only talks to the tool registry's generic interface, so it has
 dependency on OSMnx, GeoPandas, or DMIRS at all — `cli.py`, `api.py`, `dashboard.py`,
 and `gradio_app.py` are four thin, swappable front ends over the same
 `agent/`/`tools/` core.
+
+## Design decisions
+
+- **Native tool calling, no agent framework.** The loop in `agent/loop.py` is ~40
+  lines over OpenAI's chat-completions API. The control flow (call model → run tools →
+  feed results back) is small enough that a framework would add dependencies and
+  indirection without adding capability, and it keeps every step debuggable.
+- **The model sees summaries, not geometry.** Tools return short, lossy text (distance,
+  duration, counts). Full route coordinates and isochrone polygons never enter the LLM
+  context — they are held in a context-local collector (`tools/geo_context.py`) and used
+  for map export and the API/dashboard GeoJSON. This bounds token cost and keeps the
+  model from reasoning over (or hallucinating) raw coordinates.
+- **Domain logic is separate from the LLM.** `geospatial/` has no OpenAI dependency and
+  can be tested and reused on its own; `agent/` knows only the tool registry's generic
+  interface. Front ends (CLI, FastAPI, Streamlit, Gradio) are thin and interchangeable.
+- **Failures are returned to the model, not raised.** Any exception inside a tool is
+  converted to a structured JSON error (`tools/errors.py`) and handed back, so the model
+  can explain the problem in plain language. The system prompt tells it not to retry an
+  identical failing call more than once, and a per-message cap on tool-call iterations
+  (`GEOAGENT_MAX_TURNS`, default 8) guarantees the loop terminates.
+- **Offline-first for the home region.** The public Overpass API proved unreliable, so
+  Western Australia is served from a local OSM extract (see below) with live Overpass as
+  the fallback elsewhere. Live fetches run under a hard wall-clock timeout with bounded
+  retries so a rate-limited server can't hang a request indefinitely.
+- **Stateless API.** `POST /query` holds no server-side session; the client passes the
+  conversation `history` back each turn, so the service scales horizontally with no
+  shared state.
 
 ## Requirements
 
@@ -223,6 +250,41 @@ mirror (`overpass-api.de`) — leave them unset to get OSMnx's normal, usage-pol
 respecting behavior. If routing/isochrone tool calls fail with connection errors,
 try setting `GEOAGENT_OVERPASS_URL=https://overpass.kumi.systems/api` and
 `GEOAGENT_OVERPASS_RATE_LIMIT=false`.
+
+## Performance and cost
+
+- **Latency is dominated by graph construction, not the LLM.** For a WA route with the
+  local extract, a cold query took roughly 25 s: ~8 s loading the state-wide driving
+  tables (once per process), ~8 s cutting out and converting a subgraph, ~5 s adding
+  speed/travel-time attributes, and ~4 s for two Nominatim geocodes. Repeating a query
+  for the same area within a process hits an in-memory graph cache and is much faster.
+  The Streamlit app pre-loads the tables at startup so only the first query pays that
+  cost. Non-WA queries depend on live Overpass and are bounded to ~40 s per attempt.
+- **Each user message costs at least two model calls** (choose tools, then write the
+  reply), more for multi-tool queries. The default model is `gpt-4o-mini` to keep this
+  low; change it with `GEOAGENT_MODEL`.
+- **External services are rate-limited public endpoints.** Nominatim (geocoding) and
+  Overpass have usage policies and are not suitable for high-volume traffic as-is. A
+  production deployment should self-host them or use a commercial equivalent.
+- **Memory and disk.** The local WA cache is ~1.6 GB on disk and is loaded per process,
+  so each worker holds its own copy; the in-process graph cache is likewise not shared
+  between workers.
+
+## Known limitations
+
+- The agent handles routing, isochrones and WA mining lookups only. It deliberately
+  declines general POI search and arbitrary spatial analysis.
+- Mining tools are Western Australia only. MINEDEX deposits and TENGRAPH tenements are
+  not cross-referenced, results are capped at 25 features per query, and tenements cover
+  live/pending titles only. Tenement polygons are not yet included in the GeoJSON output.
+- Routes are capped at 150 km between endpoints.
+- Where OSM has no `maxspeed` tags (common in remote WA), drive times use default speeds
+  by road type (e.g. 100 km/h trunk, 30 km/h track), so travel times there are rough.
+  Walk and bike use constant speeds (5 and 15 km/h) and ignore terrain.
+- Geocoding takes the top Nominatim match, so ambiguous place names can resolve to the
+  wrong location; the system prompt asks the model to request a locality for bare street
+  names, but this is a prompt-level safeguard, not a hard guarantee.
+- Street data is from OpenStreetMap and can be incomplete or out of date.
 
 ## Testing
 
