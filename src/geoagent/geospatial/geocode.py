@@ -12,6 +12,11 @@ class GeocodeError(Exception):
     """Raised when a place name or coordinate string cannot be resolved."""
 
 
+class OutsideCoverageError(Exception):
+    """Raised when a location is outside Western Australia, the only region this
+    tool covers."""
+
+
 # Nominatim lookups cost ~2s each and OSMnx's own disk cache doesn't avoid that
 # on repeats, so memoize successful lookups for the life of the process.
 # lru_cache doesn't cache raised exceptions, so failures are retried.
@@ -24,7 +29,24 @@ def _geocode_place(text: str) -> tuple[float, float]:
 
 
 def resolve_point(text: str) -> tuple[float, float, str]:
-    """Returns (lat, lon, label) for a place name or a "lat,lon" string."""
+    """Returns (lat, lon, label) for a place name or a "lat,lon" string.
+
+    Raises OutsideCoverageError if the resolved point is outside Western Australia.
+    """
+    lat, lon, label = _resolve(text)
+
+    from geoagent.geospatial.local_extract import is_within_wa
+
+    if not is_within_wa(lat, lon):
+        raise OutsideCoverageError(
+            f"'{label}' resolved to ({lat:.3f}, {lon:.3f}), which is outside Western "
+            "Australia. This tool only covers Western Australia. If you meant a place "
+            "in WA, add the suburb or town and 'WA' to the name (e.g. 'Kalgoorlie, WA')."
+        )
+    return lat, lon, label
+
+
+def _resolve(text: str) -> tuple[float, float, str]:
     match = _LATLON_RE.match(text)
     if match:
         lat, lon = float(match.group(1)), float(match.group(2))

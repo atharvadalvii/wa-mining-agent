@@ -49,7 +49,7 @@ def _style(feature: dict) -> dict:
 
 
 def _map_html(features: list[dict]) -> str:
-    m = folium.Map(location=[10, 20], zoom_start=2, tiles="OpenStreetMap")
+    m = folium.Map(location=[-26.0, 121.0], zoom_start=5, tiles="OpenStreetMap")
     if features:
         layer = folium.GeoJson(
             {"type": "FeatureCollection", "features": features},
@@ -101,7 +101,7 @@ def _clear():
 
 
 with gr.Blocks(title="geoagent") as demo:
-    gr.Markdown("# geoagent")
+    gr.Markdown("# geoagent\nWestern Australian mining assistant: deposits, tenements, routes and reachable areas")
     conversation_state = gr.State(None)
     with gr.Row():
         with gr.Column(scale=2):
@@ -109,7 +109,7 @@ with gr.Blocks(title="geoagent") as demo:
         with gr.Column(scale=1):
             chatbot = gr.Chatbot(height=550, label="Chat")
             msg = gr.Textbox(
-                placeholder="Ask about routing, isochrones, or WA mining data...",
+                placeholder="Ask about WA mines, tenements, routes, or drive-time areas...",
                 show_label=False,
             )
             clear = gr.Button("Clear conversation")

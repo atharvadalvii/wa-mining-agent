@@ -68,7 +68,7 @@ def main() -> None:
 
     console.print(
         Panel(
-            "Ask about street routing/isochrones. Type 'exit' or Ctrl-D to quit.",
+            "Ask about WA mines, tenements, routes or drive-time areas. Type 'exit' or Ctrl-D to quit.",
             title="geoagent",
             border_style="cyan",
         )

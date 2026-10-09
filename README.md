@@ -2,34 +2,21 @@
 
 [![Tests](https://github.com/atharvadalvii/geodev/actions/workflows/tests.yml/badge.svg)](https://github.com/atharvadalvii/geodev/actions/workflows/tests.yml)
 
-A natural-language geospatial agent (CLI, REST API and web dashboard front ends) that answers street-routing and WA mining questions by
-having an LLM call out to OSMnx/GeoPandas-backed tools via OpenAI's native tool
-(function) calling — no agent framework involved.
+A natural-language assistant for **Western Australian mining and exploration**. Ask in
+plain English — "pending prospecting licences near Coolgardie", "gold deposits near
+Kalgoorlie", "how far can a crew drive from Leonora in an hour?" — and an LLM calls out
+to the right data sources and shows the results on a map. It uses OpenAI's native tool
+(function) calling directly — no agent framework involved — with CLI, REST API and web
+dashboard front ends over the same core. Coverage is Western Australia only.
 
-![geoagent demo](assets/demo.gif)
-
-Given a place name or coordinates, it can:
-
-- fetch/summarize a street network graph (`get_street_network`)
-- compute shortest-path routes by distance or travel time (`shortest_route`)
-- compute reachable-area isochrones (`isochrone`)
-
-Every `shortest_route`/`isochrone` call also auto-exports an interactive HTML map
-(via [folium](https://python-visualization.github.io/folium/)) to the local `maps/`
-directory, and the agent's reply includes a link to it. `shortest_route` (left, the
-route from the demo above) and `isochrone` (right, a 15-minute walk from Times Square)
-export differently shaped results — a path vs. a reachable-area polygon:
-
-![Route vs isochrone map exports, side by side](assets/routing-vs-isochrone.jpg)
-
-It can also look up **Western Australian mining data** direct from DMIRS's public,
-unauthenticated ArcGIS REST service:
+**Mining data** comes direct from DMIRS's public, unauthenticated ArcGIS REST service:
 
 - mines, mineral deposits, and prospects near a place (`find_mining_deposits`, from
   the MINEDEX dataset) — filterable by commodity and/or site type
 - mining tenements — legal titles like mining leases and exploration licences — near
   a place (`find_mining_tenements`, from the TENGRAPH system) — filterable by tenement
-  type and/or status (live/pending only; historical tenements aren't covered)
+  type and/or status (live/pending only; historical tenements aren't covered). Tenement
+  boundaries are drawn on the map.
 
 These two datasets aren't cross-referenced (tenements carry no commodity data, and
 deposits carry no legal title info), so a query like "iron ore leases near X" triggers
@@ -41,6 +28,18 @@ see both real, live tool calls and their raw results:
 ...and the final reply the agent composes from them:
 
 ![WA mining tools agent reply](assets/mining-result-screenshot.jpg)
+
+**Getting around** supports the mining lookups — for example the route from a town to a
+mine site, or the area a crew can reach in a given time. Built on OSMnx/GeoPandas street
+networks (an offline WA extract, see below):
+
+- fetch/summarize a street network graph (`get_street_network`)
+- compute shortest-path routes by distance or travel time (`shortest_route`)
+- compute reachable-area isochrones (`isochrone`)
+
+Every `shortest_route`/`isochrone` call also auto-exports an interactive HTML map
+(via [folium](https://python-visualization.github.io/folium/)) to the local `maps/`
+directory, and the dashboards show the latest result on a live map.
 
 ## Architecture
 
@@ -103,10 +102,12 @@ and `gradio_app.py` are four thin, swappable front ends over the same
   can explain the problem in plain language. The system prompt tells it not to retry an
   identical failing call more than once, and a per-message cap on tool-call iterations
   (`GEOAGENT_MAX_TURNS`, default 8) guarantees the loop terminates.
-- **Offline-first for the home region.** The public Overpass API proved unreliable, so
-  Western Australia is served from a local OSM extract (see below) with live Overpass as
-  the fallback elsewhere. Live fetches run under a hard wall-clock timeout with bounded
-  retries so a rate-limited server can't hang a request indefinitely.
+- **One region, done properly.** The tool is deliberately scoped to Western Australia:
+  locations outside it are rejected up front with a clear message. The public Overpass
+  API proved unreliable, so routing is served from a local OSM extract of WA (see below),
+  with live Overpass only as a fallback inside WA until that extract is built. Live
+  fetches run under a hard wall-clock timeout with bounded retries so a rate-limited
+  server can't hang a request indefinitely.
 - **Stateless API.** `POST /query` holds no server-side session; the client passes the
   conversation `history` back each turn, so the service scales horizontally with no
   shared state.
@@ -137,8 +138,8 @@ geoagent
 Type a question at the `you>` prompt, e.g.:
 
 ```
-you> what's the shortest driving route from Times Square, New York to Central Park, New York?
-you> how far can I walk from Times Square, New York in 15 minutes?
+you> pending prospecting licences near Coolgardie
+you> how far can I drive from Leonora in 60 minutes?
 ```
 
 Flags:
@@ -173,7 +174,7 @@ service).
 ```bash
 curl -s -X POST localhost:8000/query \
   -H "Content-Type: application/json" \
-  -d '{"message": "shortest driving route from Times Square, New York to Central Park, New York"}'
+  -d '{"message": "gold deposits near Kalgoorlie"}'
 ```
 
 ## Dashboards
@@ -189,16 +190,12 @@ pip install -e ".[dev,dashboard]"
 streamlit run src/geoagent/dashboard.py
 ```
 
-![Streamlit dashboard showing a route on the map](assets/dashboard-screenshot.jpg)
-
 ### Gradio
 
 ```bash
 pip install -e ".[dev,gradio]"
 python -m geoagent.gradio_app
 ```
-
-![Gradio dashboard showing a route on the map](assets/gradio-screenshot.jpg)
 
 Gradio has no native Leaflet/folium component, so its map is embedded as raw HTML
 (`gr.HTML`) rather than the interactive `streamlit-folium` widget the Streamlit
@@ -210,12 +207,11 @@ API uses.
 
 ## Local WA street network (offline routing)
 
-Routing/isochrone queries normally fetch street data live from the public Overpass
-API, which can be slow or unreliable (some networks route to backend IPs that flap
-between working and unreachable within seconds, not hours). For Western Australia —
-where this project's own use cases concentrate — you can pre-download a WA-only OSM
-extract once and route entirely offline afterward, with no per-query network
-dependency:
+Without a local extract, routing/isochrone queries fetch street data live from the
+public Overpass API, which can be slow or unreliable (some networks route to backend IPs
+that flap between working and unreachable within seconds, not hours). Since this tool
+only covers Western Australia, you can pre-download a WA-only OSM extract once and route
+entirely offline afterward, with no per-query network dependency (recommended):
 
 ```bash
 pip install -e ".[dev,local-wa]"
@@ -228,8 +224,8 @@ WA extract and pre-extracts driving/walking/cycling networks into `.cache/local_
 the whole state is too slow; a bounding box is filtered from the tables and turned into a
 small graph per query instead, which is sub-second once the tables are loaded). Once set
 up, any `shortest_route`/`isochrone` query whose points fall within WA automatically uses
-this local data — no code changes needed, and non-WA queries (e.g. NYC) keep using live
-Overpass as before. Skip this entirely if you don't need WA-specific offline routing.
+this local data — no code changes needed. Without it, routing falls back to live
+Overpass (slower and less reliable).
 
 ## Configuration
 
@@ -259,7 +255,7 @@ try setting `GEOAGENT_OVERPASS_URL=https://overpass.kumi.systems/api` and
   speed/travel-time attributes, and ~4 s for two Nominatim geocodes. Repeating a query
   for the same area within a process hits an in-memory graph cache and is much faster.
   The Streamlit app pre-loads the tables at startup so only the first query pays that
-  cost. Non-WA queries depend on live Overpass and are bounded to ~40 s per attempt.
+  cost. Without the local extract, queries depend on live Overpass and are bounded to ~40 s per attempt.
 - **Each user message costs at least two model calls** (choose tools, then write the
   reply), more for multi-tool queries. The default model is `gpt-4o-mini` to keep this
   low; change it with `GEOAGENT_MODEL`.
@@ -272,7 +268,7 @@ try setting `GEOAGENT_OVERPASS_URL=https://overpass.kumi.systems/api` and
 
 ## Known limitations
 
-- The agent handles routing, isochrones and WA mining lookups only. It deliberately
+- Western Australia only: locations elsewhere are rejected. The agent handles WA mining lookups plus routing and isochrones only. It deliberately
   declines general POI search and arbitrary spatial analysis.
 - Mining tools are Western Australia only. MINEDEX deposits and TENGRAPH tenements are
   not cross-referenced, results are capped at 25 features per query, and tenements cover

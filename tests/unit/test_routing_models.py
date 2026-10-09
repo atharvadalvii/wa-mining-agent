@@ -84,9 +84,20 @@ def test_compute_shortest_route_rejects_points_too_far_apart():
     # network call — regression test for a real bug: two bare street names with
     # no city context geocoded to opposite sides of the planet, and the missing
     # span cap meant the tool tried to fetch a ~10,000km-radius street network
-    # instead of failing fast.
+    # instead of failing fast. (Perth to Port Hedland: both in WA, ~1,300 km apart.)
     with pytest.raises(RouteTooFarError):
-        compute_shortest_route("39.6383482,-119.8542626", "-23.3648736,119.7306373")
+        compute_shortest_route("-31.95,115.86", "-20.31,118.60")
+
+
+def test_tools_reject_locations_outside_western_australia():
+    # Times Square, New York: outside the only region this tool covers. Raised
+    # before any street data is fetched.
+    from geoagent.geospatial.geocode import OutsideCoverageError, resolve_point
+
+    with pytest.raises(OutsideCoverageError, match="Western Australia"):
+        resolve_point("40.7580,-73.9855")
+    with pytest.raises(OutsideCoverageError):
+        compute_shortest_route("40.7580,-73.9855", "40.7829,-73.9654")
 
 
 def test_isochrone_tool_text_flags_truncated_result():

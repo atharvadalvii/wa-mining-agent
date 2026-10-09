@@ -70,6 +70,7 @@ if "features" not in st.session_state:
     st.session_state.features = []
 
 st.title("geoagent")
+st.caption("Western Australian mining assistant: deposits, tenements, routes and reachable areas")
 
 with st.sidebar:
     st.header("Chat")
@@ -83,7 +84,7 @@ with st.sidebar:
             with st.chat_message(message["role"]):
                 st.write(message["content"])
 
-    prompt = st.chat_input("Ask about routing, isochrones, or WA mining data...")
+    prompt = st.chat_input("Ask about WA mines, tenements, routes, or drive-time areas...")
     if prompt:
         checkpoint = len(st.session_state.conversation.messages)
         st.session_state.conversation.add_user(prompt)
@@ -126,7 +127,7 @@ def _style(feature: dict) -> dict:
     return {"color": "#d93025"}
 
 
-m = folium.Map(location=[10, 20], zoom_start=2, tiles="OpenStreetMap")
+m = folium.Map(location=[-26.0, 121.0], zoom_start=5, tiles="OpenStreetMap")
 if st.session_state.features:
     layer = folium.GeoJson(
         {"type": "FeatureCollection", "features": st.session_state.features},

@@ -289,6 +289,11 @@ def get_network_summary(
 ):
     from geoagent.geospatial.models import NetworkSummary
 
+    from geoagent.geospatial.geocode import resolve_point
+
+    # Raises OutsideCoverageError for anywhere outside Western Australia.
+    resolve_point(place if place else f"{lat},{lon}")
+
     if place:
         graph = default_cache.get_for_place(place, network_type)
         label = place
