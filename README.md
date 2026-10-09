@@ -9,6 +9,13 @@ to the right data sources and shows the results on a map. It uses OpenAI's nativ
 (function) calling directly — no agent framework involved — with CLI, REST API and web
 dashboard front ends over the same core. Coverage is Western Australia only.
 
+**Quick start** (details under [Setup](#setup)):
+
+```bash
+pip install -e ".[dev,dashboard]" && cp .env.example .env   # add your OPENAI_API_KEY
+streamlit run src/geoagent/dashboard.py                      # chat + live map
+```
+
 **Mining data** comes direct from DMIRS's public, unauthenticated ArcGIS REST service:
 
 - mines, mineral deposits, and prospects near a place (`find_mining_deposits`, from
@@ -63,34 +70,79 @@ version** (pan, zoom and hover for details).
 ## Architecture
 
 ```mermaid
-flowchart LR
-    U1["CLI user<br/>(rich REPL)"] -->|natural language| L["Agent Loop<br/>(OpenAI tool calling)"]
-    U2["HTTP client<br/>(FastAPI /query)"] -->|natural language| L
-    U3["Dashboard<br/>(Streamlit or Gradio, chat + live map)"] -->|natural language| L
-    L -->|reply + geojson / map link| U1
-    L -->|reply + geojson| U2
-    L -->|reply + geojson| U3
+flowchart TD
+    subgraph FE["Front ends (thin, swappable)"]
+        U1["CLI (rich REPL)"]
+        U2["REST API (FastAPI)"]
+        U3["Dashboard (Streamlit / Gradio)"]
+    end
 
-    L -->|tool call| REG["Tool Registry<br/>(schemas + dispatch)"]
-    REG -->|result text| L
+    FE <-->|"question / reply"| L["Agent loop<br/>OpenAI tool calling"]
+    L <-->|"tool call / text result"| REG["Tool registry<br/>schemas, dispatch, error mapping"]
 
-    REG --> RT["Routing / Isochrone tools"]
-    REG --> MT["WA Mining tools"]
+    subgraph TOOLS["Tools"]
+        MT["WA mining tools<br/>deposits, tenements"]
+        RT["Routing tools<br/>route, isochrone, network"]
+    end
+    REG --> MT
+    REG --> RT
 
-    RT --> OSM["OSMnx / NetworkX<br/>street graphs + routing"]
-    RT --> GPD["GeoPandas<br/>isochrone geometry"]
-    OSM --> MAP["folium<br/>HTML map export"]
-    GPD --> MAP
-    MAP -.->|saved file path| RT
+    MT --> GEO["Geocoder (Nominatim)<br/>+ WA coverage guard"]
+    RT --> GEO
 
-    MT --> DMIRS["DMIRS ArcGIS REST API<br/>MINEDEX + TENGRAPH"]
+    subgraph DATA["Data sources"]
+        DMIRS["DMIRS ArcGIS REST<br/>MINEDEX + TENGRAPH"]
+        LOCAL["Local WA street network<br/>Geofabrik extract as parquet"]
+        OVP["Overpass API (live)<br/>fallback only"]
+    end
+    MT --> DMIRS
+    RT --> LOCAL
+    RT -.-> OVP
 
-    style U1 fill:#1a73e8,color:#fff
-    style U2 fill:#1a73e8,color:#fff
-    style U3 fill:#1a73e8,color:#fff
+    LOCAL --> GRAPH["OSMnx / NetworkX / GeoPandas<br/>graph, route, isochrone"]
+    OVP --> GRAPH
+    GRAPH --> MAP["folium HTML map export"]
+
+    MT -.->|"GeoJSON"| COL["GeoJSON collector<br/>full geometry, kept out of the LLM"]
+    RT -.->|"GeoJSON"| COL
+    COL -.->|"map features"| FE
+
     style L fill:#188038,color:#fff
     style REG fill:#e37400,color:#fff
+    style COL fill:#1a73e8,color:#fff
 ```
+
+### How one question flows
+
+"Iron ore leases near Port Hedland" end to end:
+
+```mermaid
+sequenceDiagram
+    actor User
+    participant FE as Front end
+    participant Agent as Agent loop
+    participant LLM as OpenAI model
+    participant Tools as Tool registry and tools
+    participant Ext as Nominatim and DMIRS
+
+    User->>FE: question
+    FE->>Agent: run_turn with message history
+    loop until the model stops calling tools, max 8 rounds
+        Agent->>LLM: messages and tool schemas
+        LLM-->>Agent: tool calls, or the final answer
+        Agent->>Tools: dispatch each tool call
+        Tools->>Ext: geocode the place, check it is in WA, query the dataset
+        Ext-->>Tools: rows and geometry
+        Tools-->>Agent: short text summary or a structured error
+        Note over Tools,FE: full geometry goes to the GeoJSON collector, not to the model
+    end
+    Agent-->>FE: reply text
+    FE-->>User: answer, plus the latest GeoJSON drawn on the map
+```
+
+Two tool calls happen here: `find_mining_deposits` for the iron ore sites and
+`find_mining_tenements` for the leases. They are separate datasets, so the model
+presents them as two unlinked results.
 
 `geospatial/` holds pure domain logic (OSMnx/NetworkX/GeoPandas/DMIRS calls) with no
 knowledge of OpenAI. `tools/` adapts that into OpenAI tool schemas and lossy,
@@ -104,8 +156,8 @@ and `gradio_app.py` are four thin, swappable front ends over the same
 
 ## Design decisions
 
-- **Native tool calling, no agent framework.** The loop in `agent/loop.py` is ~40
-  lines over OpenAI's chat-completions API. The control flow (call model → run tools →
+- **Native tool calling, no agent framework.** The loop in `agent/loop.py` is under
+  60 lines over OpenAI's chat-completions API. The control flow (call model → run tools →
   feed results back) is small enough that a framework would add dependencies and
   indirection without adding capability, and it keeps every step debuggable.
 - **The model sees summaries, not geometry.** Tools return short, lossy text (distance,
@@ -127,9 +179,20 @@ and `gradio_app.py` are four thin, swappable front ends over the same
   with live Overpass only as a fallback inside WA until that extract is built. Live
   fetches run under a hard wall-clock timeout with bounded retries so a rate-limited
   server can't hang a request indefinitely.
+- **Model output is untrusted input.** The DMIRS ArcGIS API takes a raw SQL-like `WHERE`
+  expression with no parameter binding, and the commodity/tenement filters in it are
+  chosen by the LLM from user text. `geospatial/wa_mining.py` strips everything except
+  letters, digits, spaces and hyphens from each filter value before it goes into the
+  query, so a prompt-injected or malformed value can't change the query's structure.
+- **Geocoding is ranked, not first-hit.** Nominatim's top result for many WA towns is an
+  administrative boundary (for "Leonora, WA" it is the *Shire of Leonora*, whose centre is
+  ~55 km from the town), which would silently centre every result in the wrong place.
+  `geospatial/geocode.py` asks for several results and prefers the actual settlement.
+  Every location also passes a Western Australia check before any data is fetched.
 - **Stateless API.** `POST /query` holds no server-side session; the client passes the
-  conversation `history` back each turn, so the service scales horizontally with no
-  shared state.
+  conversation `history` back each turn, so there is no session state to share between
+  instances. (Each worker still holds its own in-memory street-network cache; see
+  Performance and cost.)
 
 ## Requirements
 
@@ -287,18 +350,22 @@ try setting `GEOAGENT_OVERPASS_URL=https://overpass.kumi.systems/api` and
 
 ## Known limitations
 
-- Western Australia only: locations elsewhere are rejected. The agent handles WA mining lookups plus routing and isochrones only. It deliberately
-  declines general POI search and arbitrary spatial analysis.
-- Mining tools are Western Australia only. MINEDEX deposits and TENGRAPH tenements are
-  not cross-referenced, results are capped at 25 features per query, and tenements cover
-  live/pending titles only.
+- Western Australia only: locations elsewhere are rejected. The agent handles WA mining
+  lookups plus routing and isochrones; it deliberately declines general POI search and
+  arbitrary spatial analysis.
+- MINEDEX deposits and TENGRAPH tenements are not cross-referenced, results are capped at
+  25 features per query, and tenements cover live/pending titles only.
+- Isochrones in dense areas (e.g. Perth) are fetched within a fixed-size area to keep
+  response times reasonable, so long drive-time areas there are flagged as underestimates
+  in the reply. Remote areas expand the fetch until the reachable area is fully covered.
 - Routes are capped at 150 km between endpoints.
 - Where OSM has no `maxspeed` tags (common in remote WA), drive times use default speeds
   by road type (e.g. 100 km/h trunk, 30 km/h track), so travel times there are rough.
   Walk and bike use constant speeds (5 and 15 km/h) and ignore terrain.
-- Geocoding takes the top Nominatim match, so ambiguous place names can resolve to the
-  wrong location; the system prompt asks the model to request a locality for bare street
-  names, but this is a prompt-level safeguard, not a hard guarantee.
+- Geocoding ranks Nominatim's top few results but can still pick the wrong place for
+  ambiguous names. The system prompt asks the model to request a locality for bare street
+  names, but that is a prompt-level safeguard, not a hard guarantee. The WA check uses a
+  coarse bounding box, so points just over the NT/SA border can pass it.
 - Street data is from OpenStreetMap and can be incomplete or out of date.
 
 ## Testing
@@ -307,6 +374,13 @@ try setting `GEOAGENT_OVERPASS_URL=https://overpass.kumi.systems/api` and
 pytest              # unit tests only (fast, no network calls; needs `.[dev,api]` for API tests)
 pytest -m integration  # also hits real OSM/Overpass data
 ```
+
+The unit suite (58 tests, run on every push by GitHub Actions) mocks the OpenAI client and
+all external services, so it runs offline in a few seconds. Several tests are regression
+tests for failures found in real use — for example drive isochrones breaking where OSM has
+no speed limits, a route destination stranded in a disconnected piece of the map, and
+geocoding to the shire instead of the town — each written to fail without its fix.
+Integration tests hit real OSM data and are excluded by default.
 
 ## Project layout
 
@@ -332,12 +406,16 @@ src/geoagent/
     ├── network.py          # OSMnx graph fetch + in-process cache
     ├── routing.py          # shortest-path computation
     ├── isochrone.py        # reachable-area computation
-    ├── geocode.py          # place name / "lat,lon" resolution
+    ├── geocode.py          # place name / "lat,lon" resolution, settlement ranking, WA guard
     ├── mapping.py          # folium HTML map export
     ├── local_extract.py    # offline WA street network (see "Local WA street network" above)
     ├── wa_mining.py        # DMIRS ArcGIS REST queries
     └── models.py           # result dataclasses + their model-facing text/GeoJSON summaries
 ```
+
+Outside `src/`: `tests/` (unit and integration suites), `assets/` (README screenshots and
+example maps) and `scripts/generate_readme_maps.py` (regenerates the example maps from the
+live tools).
 
 To add a new capability (e.g. POI search), add a `geospatial/<feature>.py` module and
 a `tools/<feature>.py` that registers its own tool specs — no changes needed to `agent/`.
