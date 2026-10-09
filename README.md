@@ -11,6 +11,11 @@ dashboard front ends over the same core. Coverage is Western Australia only.
 
 The Python package and command-line tool are named `geoagent`.
 
+The Streamlit dashboard answering "Pending prospecting licences near Coolgardie", with the
+tenement boundaries drawn on the map:
+
+![Streamlit dashboard showing pending prospecting licences near Coolgardie](assets/dashboard-tenements.png)
+
 **Quick start** (details under [Setup](#setup)):
 
 ```bash

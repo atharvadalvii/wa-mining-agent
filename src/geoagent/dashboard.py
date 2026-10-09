@@ -140,4 +140,9 @@ if st.session_state.features:
     if bounds and bounds[0][0] is not None:
         m.fit_bounds(bounds)
 
-st_folium(m, width=None, height=650)
+# returned_objects=[]: the dashboard never reads the map's pan/zoom/click events, and
+# by default each of them triggers a script rerun. A rerun that lands while the agent
+# is mid-answer makes Streamlit abandon the turn silently (the question stays on
+# screen with no reply and no error), so visitors who touch the map while waiting
+# lose their answer. Returning nothing means the map can't interrupt a turn.
+st_folium(m, width=None, height=650, returned_objects=[], key="map")
