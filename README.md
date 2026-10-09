@@ -41,6 +41,24 @@ Every `shortest_route`/`isochrone` call also auto-exports an interactive HTML ma
 (via [folium](https://python-visualization.github.io/folium/)) to the local `maps/`
 directory, and the dashboards show the latest result on a live map.
 
+## Examples
+
+Each of these is a real question the agent answered, with the map it produced. **Click
+a map to open the interactive version** (pan, zoom and hover for details). They are
+regenerated from the live tools by `python scripts/generate_readme_maps.py`.
+
+**1. Reachable area — "How far can a crew drive from Leonora in 60 minutes?"**
+
+[![60-minute drive area from Leonora](assets/example-isochrone.png)](https://htmlpreview.github.io/?https://github.com/atharvadalvii/geodev/blob/main/assets/maps/example-isochrone.html)
+
+**2. Mines in an area — "Gold deposits within 25 km of Kalgoorlie"**
+
+[![Gold deposits near Kalgoorlie](assets/example-deposits.png)](https://htmlpreview.github.io/?https://github.com/atharvadalvii/geodev/blob/main/assets/maps/example-deposits.html)
+
+**3. Shortest path — "Fastest driving route from Kalgoorlie to Kambalda"**
+
+[![Fastest drive from Kalgoorlie to Kambalda](assets/example-route.png)](https://htmlpreview.github.io/?https://github.com/atharvadalvii/geodev/blob/main/assets/maps/example-route.html)
+
 ## Architecture
 
 ```mermaid
