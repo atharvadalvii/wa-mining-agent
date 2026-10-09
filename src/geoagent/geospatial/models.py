@@ -75,13 +75,22 @@ class IsochroneResult:
     approx_radius_m: float
     center_point: tuple[float, float] = (0.0, 0.0)
     hull_coords: list[tuple[float, float]] = field(default_factory=list)
+    # True when the reachable area ran into the edge of the largest street
+    # network we're willing to fetch, so the real area is bigger than reported.
+    truncated: bool = False
 
     def to_tool_text(self) -> str:
+        note = (
+            " NOTE: the reachable area extends beyond the street data fetched for this "
+            "query, so this is an underestimate."
+            if self.truncated
+            else ""
+        )
         return (
             f"Isochrone from '{self.center_label}' within {self.minutes:.0f} min "
             f"({self.network_type}): reaches {self.n_reachable_nodes} network nodes, "
             f"covering approximately {self.area_km2:.2f} km^2 "
-            f"(approx radius {self.approx_radius_m:.0f} m)."
+            f"(approx radius {self.approx_radius_m:.0f} m)." + note
         )
 
     def to_geojson_feature(self) -> dict:
@@ -96,6 +105,7 @@ class IsochroneResult:
                 "network_type": self.network_type,
                 "area_km2": self.area_km2,
                 "n_reachable_nodes": self.n_reachable_nodes,
+                "truncated": self.truncated,
             },
         }
 

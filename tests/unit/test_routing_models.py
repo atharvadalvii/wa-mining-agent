@@ -87,3 +87,16 @@ def test_compute_shortest_route_rejects_points_too_far_apart():
     # instead of failing fast.
     with pytest.raises(RouteTooFarError):
         compute_shortest_route("39.6383482,-119.8542626", "-23.3648736,119.7306373")
+
+
+def test_isochrone_tool_text_flags_truncated_result():
+    kwargs = dict(
+        center_label="Leonora",
+        minutes=60,
+        network_type="drive",
+        n_reachable_nodes=10,
+        area_km2=5.0,
+        approx_radius_m=1000.0,
+    )
+    assert "underestimate" not in IsochroneResult(**kwargs).to_tool_text()
+    assert "underestimate" in IsochroneResult(**kwargs, truncated=True).to_tool_text()
