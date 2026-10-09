@@ -100,3 +100,40 @@ def test_isochrone_tool_text_flags_truncated_result():
     )
     assert "underestimate" not in IsochroneResult(**kwargs).to_tool_text()
     assert "underestimate" in IsochroneResult(**kwargs, truncated=True).to_tool_text()
+
+
+def _fragmented_graph():
+    import networkx as nx
+
+    g = nx.MultiDiGraph(crs="EPSG:4326")
+    # Main network: nodes 1-2 (~110 m apart). Stranded fragment: node 3, ~55 m
+    # from node 2 but not connected to it (e.g. a jetty way not joined to the path).
+    g.add_node(1, x=115.8500, y=-32.0000)
+    g.add_node(2, x=115.8500, y=-32.0010)
+    g.add_node(3, x=115.8500, y=-32.0015)
+    g.add_edge(1, 2, length=111.0)
+    g.add_edge(2, 1, length=111.0)
+    return g
+
+
+def test_resnap_moves_stranded_endpoint_into_connected_component():
+    from geoagent.geospatial.routing import _resnap_to_connected
+
+    result = _resnap_to_connected(
+        _fragmented_graph(), 1, 3, (-32.0000, 115.8500), (-32.0015, 115.8500)
+    )
+
+    assert result is not None
+    o_node, d_node, notes = result
+    assert (o_node, d_node) == (1, 2)
+    assert notes[0] == "" and "nearest connected path" in notes[1]
+
+
+def test_resnap_gives_up_when_nothing_connected_is_nearby():
+    from geoagent.geospatial.routing import _resnap_to_connected
+
+    # Destination point is ~1.1 km from the nearest connected node.
+    assert (
+        _resnap_to_connected(_fragmented_graph(), 1, 3, (-32.0, 115.85), (-32.012, 115.85))
+        is None
+    )

@@ -60,6 +60,39 @@ def path_to_route_result(
     )
 
 
+# Farthest we'll move an endpoint to reach the connected network when its
+# nearest node is stranded in a disconnected fragment.
+_MAX_RESNAP_M = 500.0
+
+
+def _nearest_in_component(graph, component, lat: float, lon: float) -> tuple[int, float]:
+    best_node, best_m = -1, float("inf")
+    for node in component:
+        d = haversine_m(lat, lon, graph.nodes[node]["y"], graph.nodes[node]["x"])
+        if d < best_m:
+            best_node, best_m = node, d
+    return best_node, best_m
+
+
+def _resnap_to_connected(graph, o_node, d_node, o_pt, d_pt):
+    """Returns (o_node, d_node, label_notes) with endpoints moved into a shared
+    component, or None if no nearby connected node exists within _MAX_RESNAP_M."""
+    import networkx as nx
+
+    o_comp = nx.node_connected_component(graph.to_undirected(as_view=True), o_node)
+    d_comp = nx.node_connected_component(graph.to_undirected(as_view=True), d_node)
+    # Move the endpoint in the smaller fragment into the larger component.
+    if len(d_comp) <= len(o_comp):
+        new_d, moved = _nearest_in_component(graph, o_comp, *d_pt)
+        if moved > _MAX_RESNAP_M:
+            return None
+        return o_node, new_d, ("", f" (nearest connected path, {moved:.0f} m away)")
+    new_o, moved = _nearest_in_component(graph, d_comp, *o_pt)
+    if moved > _MAX_RESNAP_M:
+        return None
+    return new_o, d_node, (f" (nearest connected path, {moved:.0f} m away)", "")
+
+
 def compute_shortest_route(
     origin: str,
     destination: str,
@@ -108,6 +141,22 @@ def compute_shortest_route(
         path = ox.routing.shortest_path(graph, o_node, d_node, weight=weight)
     except nx.NetworkXNoPath:
         path = None
+
+    if path is None:
+        # The nearest node to a geocoded point can sit in a tiny disconnected
+        # fragment of the OSM data (e.g. a jetty way not joined to the footpath
+        # network), so no path exists even though the places are plainly
+        # connected. Re-snap each endpoint to the nearest node inside the
+        # *other* endpoint's component, and say so in the label.
+        resnapped = _resnap_to_connected(graph, o_node, d_node, (o_lat, o_lon), (d_lat, d_lon))
+        if resnapped is not None:
+            o_node, d_node, notes = resnapped
+            o_label += notes[0]
+            d_label += notes[1]
+            try:
+                path = ox.routing.shortest_path(graph, o_node, d_node, weight=weight)
+            except nx.NetworkXNoPath:
+                path = None
 
     if path is None:
         raise RouteNotFoundError(
