@@ -1,6 +1,6 @@
-# geoagent
+# wa-mining-agent
 
-[![Tests](https://github.com/atharvadalvii/geodev/actions/workflows/tests.yml/badge.svg)](https://github.com/atharvadalvii/geodev/actions/workflows/tests.yml)
+[![Tests](https://github.com/atharvadalvii/wa-mining-agent/actions/workflows/tests.yml/badge.svg)](https://github.com/atharvadalvii/wa-mining-agent/actions/workflows/tests.yml)
 
 A natural-language assistant for **Western Australian mining and exploration**. Ask in
 plain English ("pending prospecting licences near Coolgardie", "gold deposits near
@@ -57,15 +57,15 @@ version** (pan, zoom and hover for details).
 
 **1. Reachable area: "How far can a crew drive from Leonora in 60 minutes?"**
 
-[![60-minute drive area from Leonora](assets/example-isochrone.png)](https://htmlpreview.github.io/?https://github.com/atharvadalvii/geodev/blob/main/assets/maps/example-isochrone.html)
+[![60-minute drive area from Leonora](assets/example-isochrone.png)](https://htmlpreview.github.io/?https://github.com/atharvadalvii/wa-mining-agent/blob/main/assets/maps/example-isochrone.html)
 
 **2. Mines in an area: "Gold deposits within 25 km of Kalgoorlie"**
 
-[![Gold deposits near Kalgoorlie](assets/example-deposits.png)](https://htmlpreview.github.io/?https://github.com/atharvadalvii/geodev/blob/main/assets/maps/example-deposits.html)
+[![Gold deposits near Kalgoorlie](assets/example-deposits.png)](https://htmlpreview.github.io/?https://github.com/atharvadalvii/wa-mining-agent/blob/main/assets/maps/example-deposits.html)
 
 **3. Shortest path: "Fastest driving route from Kalgoorlie to Kambalda"**
 
-[![Fastest drive from Kalgoorlie to Kambalda](assets/example-route.png)](https://htmlpreview.github.io/?https://github.com/atharvadalvii/geodev/blob/main/assets/maps/example-route.html)
+[![Fastest drive from Kalgoorlie to Kambalda](assets/example-route.png)](https://htmlpreview.github.io/?https://github.com/atharvadalvii/wa-mining-agent/blob/main/assets/maps/example-route.html)
 
 ## Architecture
 
