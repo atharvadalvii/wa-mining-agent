@@ -43,9 +43,10 @@ directory, and the dashboards show the latest result on a live map.
 
 ## Examples
 
-Each of these is a real question the agent answered, with the map it produced. **Click
-a map to open the interactive version** (pan, zoom and hover for details). They are
-regenerated from the live tools by `python scripts/generate_readme_maps.py`.
+Three example questions and the maps they produce. The maps come from the same live
+tools the agent calls (real DMIRS data and the local WA street network), run by
+`python scripts/generate_readme_maps.py`. **Click a map to open the interactive
+version** (pan, zoom and hover for details).
 
 **1. Reachable area — "How far can a crew drive from Leonora in 60 minutes?"**
 
