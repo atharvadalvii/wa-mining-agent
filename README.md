@@ -16,6 +16,10 @@ tenement boundaries drawn on the map:
 
 ![Streamlit dashboard showing pending prospecting licences near Coolgardie](assets/dashboard-tenements.png)
 
+**Live demo:** https://wa-mining-agent-fczdssjqgdtbi28aypz36i.streamlit.app (mining questions;
+routing is off in the hosted version, see [Free hosting](#free-hosting-streamlit-community-cloud)).
+It may take a few seconds to wake if nobody has used it recently.
+
 **Quick start** (details under [Setup](#setup)):
 
 ```bash
