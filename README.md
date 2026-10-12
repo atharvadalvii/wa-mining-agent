@@ -303,6 +303,14 @@ terraform output app_url
 Stop paying for compute any time with `-var desired_count=0`, and remove everything
 with `terraform destroy`.
 
+## License
+
+The code is released under the [MIT License](LICENSE). The data it uses has its own
+terms: street data is © OpenStreetMap contributors, available under the
+[ODbL](https://www.openstreetmap.org/copyright), and the mining data comes from the
+Government of Western Australia's DMIRS public services (MINEDEX and TENGRAPH). Check
+their terms before reusing either.
+
 ## Requirements
 
 - Python 3.10+

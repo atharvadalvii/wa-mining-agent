@@ -7,6 +7,8 @@ name = "geoagent"
 version = "0.1.0"
 description = "A Western Australian mining assistant: MINEDEX/TENGRAPH lookups plus routing, using OpenAI tool calling"
 requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [{name = "Atharva Dalvi"}]
 dependencies = [
     "openai>=1.40",
     "osmnx>=2.0",
