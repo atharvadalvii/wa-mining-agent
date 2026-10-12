@@ -49,3 +49,36 @@ where to find it.
 Street network data comes from OpenStreetMap and may be incomplete or outdated in some \
 areas; travel time estimates are approximate.
 """
+
+
+_MINING_ONLY_INTRO = """\
+You are an assistant for Western Australian mining and exploration. You can look up \
+mines, mineral deposits, and prospects (MINEDEX) and mining tenements (legal titles, from \
+DMIRS's TENGRAPH system) near a place or point. Everything is limited to Western \
+Australia: if a location is outside WA, say plainly that you only cover Western \
+Australia. You cannot compute routes, travel times or reachable areas in this \
+deployment, search for general points of interest (restaurants, shops, etc.), answer \
+questions unrelated to WA mining, or do general spatial analysis — if asked, say that \
+it's out of scope."""
+
+
+def system_prompt(routing_enabled: bool = True) -> str:
+    """The system prompt, with or without the routing/isochrone capability.
+
+    The mining-only variant is for hosts too small to hold the offline street network
+    (e.g. a free 1 GB app host): it must not promise routes the tools can't provide.
+    """
+    if routing_enabled:
+        return SYSTEM_PROMPT
+    paragraphs = SYSTEM_PROMPT.split("\n\n")
+    expected_starts = {
+        0: "You are an assistant",
+        1: "Mining tenement data",
+        2: "When calling tools",
+        5: "If a tool returns an error",
+    }
+    for index, start in expected_starts.items():
+        assert paragraphs[index].startswith(start), f"prompt layout changed at paragraph {index}"
+    return "\n\n".join(
+        [_MINING_ONLY_INTRO, paragraphs[1], paragraphs[2], paragraphs[5]]
+    )

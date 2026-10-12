@@ -201,28 +201,35 @@ and `gradio_app.py` are four thin, swappable front ends over the same
   instances. (Each worker still holds its own in-memory street-network cache; see
   Performance and cost.)
 
-## Free hosting (Hugging Face Spaces)
+## Free hosting (Streamlit Community Cloud)
 
-The same container runs for free on a Hugging Face Space (2 vCPU, 16 GB RAM), which is
-enough for the offline routing that free app hosts can't hold. The street data lives in a
-free public Hugging Face dataset and is downloaded when the container starts. The Space
-sleeps after a couple of days without visitors and takes about a minute to wake.
+The mining lookups need almost no memory, so a mining-only version of the dashboard runs
+on [Streamlit Community Cloud](https://streamlit.io/cloud) for free, straight from this
+repo, with no card required. Routing and drive-time areas are switched off there, because
+the offline street network (about 1.4 GB in memory) doesn't fit in its ~1 GB limit; the
+assistant tells visitors routing isn't available in that deployment instead of failing.
 
-```bash
-pip install -e ".[hf]"
-huggingface-cli login                       # a write token; never put it in a file
+1. Go to [share.streamlit.io](https://share.streamlit.io), sign in with GitHub and choose
+   **Create app**: repository `atharvadalvii/wa-mining-agent`, branch `main`, main file
+   `src/geoagent/dashboard.py`.
+2. Under **Advanced settings > Secrets**, add:
 
-# 1. Upload the street data once (needs `python -m geoagent.setup_local_wa` to have run)
-python scripts/upload_street_data_hf.py YOU/wa-street-data
+   ```toml
+   OPENAI_API_KEY = "sk-..."
+   GEOAGENT_ENABLE_ROUTING = "false"
+   GEOAGENT_MAX_SESSION_MESSAGES = "20"
+   ```
 
-# 2. Publish the app (reads OPENAI_API_KEY from your environment, stores it as a Space secret)
-export OPENAI_API_KEY=sk-...
-python scripts/deploy_hf_space.py YOU/wa-mining-agent YOU/wa-street-data
-```
+3. Deploy. Every push to `main` redeploys it.
 
-The only cost is model usage, a fraction of a cent per question. Visitors are limited to
-20 questions per session by default, and you should also set a hard monthly limit in your
-OpenAI account.
+The only cost is model usage, a fraction of a cent per question. Visitors are limited
+per session (above), and you should also set a hard monthly limit in your OpenAI account.
+
+The full app, routing included, runs anywhere with ~4 GB of memory: locally, in the
+included container, or on AWS (below). The container can fetch its street data from a
+public Hugging Face dataset (`GEOAGENT_DATA_HF_REPO`, uploaded with
+`scripts/upload_street_data_hf.py`) or from S3. Hugging Face's free tier no longer runs
+Docker apps, so it is used only for storing that data.
 
 ## Deploying to AWS
 
@@ -473,7 +480,7 @@ pytest              # unit tests only (fast, no network calls; needs `.[dev,api]
 pytest -m integration  # also hits real OSM/Overpass data
 ```
 
-The unit suite (73 tests, run on every push by GitHub Actions) mocks the OpenAI client and
+The unit suite (76 tests, run on every push by GitHub Actions) mocks the OpenAI client and
 all external services, so it runs offline in a few seconds. Several tests are regression
 tests for failures found in real use (for example drive isochrones breaking where OSM has
 no speed limits, a route destination stranded in a disconnected piece of the map, and
@@ -513,8 +520,8 @@ src/geoagent/
     └── models.py           # result dataclasses + their model-facing text/GeoJSON summaries
 ```
 
-Outside `src/`: `Dockerfile` and `docker/` (container image), `huggingface/` and `scripts/`
-(free hosting and example-map tooling), `infra/` (Terraform for AWS),
+Outside `src/`: `Dockerfile` and `docker/` (container image), `scripts/` (example-map and
+street-data tooling), `infra/` (Terraform for AWS),
 `.github/workflows/` (CI and a manual deploy workflow), `tests/` (unit and integration suites), `assets/` (README screenshots and
 example maps) and `scripts/generate_readme_maps.py` (regenerates the example maps from the
 live tools).

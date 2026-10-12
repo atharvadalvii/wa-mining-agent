@@ -17,15 +17,14 @@ from streamlit_folium import st_folium
 
 from geoagent.agent.conversation import Conversation
 from geoagent.agent.loop import run_turn
-from geoagent.agent.prompts import SYSTEM_PROMPT
+from geoagent.agent.prompts import system_prompt
 from geoagent.config import configure_osmnx, load_settings
 from geoagent.limits import check_message
 from geoagent.geospatial import local_extract
 from geoagent.geospatial.mapping import configure_maps_dir
 from geoagent.tools.geo_context import collect_geo_features
 
-import geoagent.tools.routing  # noqa: F401  (import for tool-registration side effects)
-import geoagent.tools.wa_mining  # noqa: F401
+import geoagent.tools.wa_mining  # noqa: F401  (import for tool-registration side effects)
 
 st.set_page_config(page_title="geoagent", layout="wide")
 
@@ -57,7 +56,10 @@ def _setup():
         overpass_rate_limit=settings.overpass_rate_limit,
     )
     configure_maps_dir(settings.maps_dir)
-    local_extract.warm_up()
+    if settings.enable_routing:
+        import geoagent.tools.routing  # noqa: F401  (registers the routing tools)
+
+        local_extract.warm_up()
     from openai import OpenAI
 
     return settings, OpenAI(api_key=settings.openai_api_key)
@@ -66,17 +68,21 @@ def _setup():
 settings, client = _setup()
 
 if "conversation" not in st.session_state:
-    st.session_state.conversation = Conversation.start(SYSTEM_PROMPT)
+    st.session_state.conversation = Conversation.start(system_prompt(settings.enable_routing))
 if "features" not in st.session_state:
     st.session_state.features = []
 
 st.title("geoagent")
-st.caption("Western Australian mining assistant: deposits, tenements, routes and reachable areas")
+st.caption(
+    "Western Australian mining assistant: deposits, tenements, routes and reachable areas"
+    if settings.enable_routing
+    else "Western Australian mining assistant: mines, deposits and mining tenements"
+)
 
 with st.sidebar:
     st.header("Chat")
     if st.button("Clear conversation"):
-        st.session_state.conversation = Conversation.start(SYSTEM_PROMPT)
+        st.session_state.conversation = Conversation.start(system_prompt(settings.enable_routing))
         st.session_state.features = []
         st.rerun()
 
@@ -85,7 +91,11 @@ with st.sidebar:
             with st.chat_message(message["role"]):
                 st.write(message["content"])
 
-    prompt = st.chat_input("Ask about WA mines, tenements, routes, or drive-time areas...")
+    prompt = st.chat_input(
+        "Ask about WA mines, tenements, routes, or drive-time areas..."
+        if settings.enable_routing
+        else "Ask about WA mines, deposits or mining tenements..."
+    )
     questions_asked = sum(
         1 for m in st.session_state.conversation.messages if m.get("role") == "user"
     )

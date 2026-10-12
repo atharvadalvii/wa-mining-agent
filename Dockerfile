@@ -1,5 +1,5 @@
-# Container image for the Streamlit dashboard: runs on Hugging Face Spaces (free) or
-# AWS ECS Fargate.
+# Container image for the full Streamlit dashboard (with routing): runs anywhere with ~4 GB
+# of memory, e.g. AWS ECS Fargate or a VM.
 #
 # The offline WA street network (~600 MB of tables plus a 109 MB .pbf) is NOT baked into
 # the image. The entrypoint downloads it at startup, from a Hugging Face dataset

@@ -24,3 +24,13 @@ def test_is_overpass_reachable_probes_the_configured_overpass_host(monkeypatch):
     is_overpass_reachable()
 
     assert seen_hostnames == ["my-mirror.example.org"]
+
+
+def test_enable_routing_defaults_on_and_can_be_turned_off(monkeypatch):
+    from geoagent.config import load_settings
+
+    monkeypatch.setenv("OPENAI_API_KEY", "x")
+    monkeypatch.delenv("GEOAGENT_ENABLE_ROUTING", raising=False)
+    assert load_settings().enable_routing is True
+    monkeypatch.setenv("GEOAGENT_ENABLE_ROUTING", "false")
+    assert load_settings().enable_routing is False

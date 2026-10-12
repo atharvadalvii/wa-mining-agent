@@ -24,6 +24,8 @@ class Settings:
     # Per-visitor limits for a public deployment (0 disables the limit).
     max_session_messages: int = 30
     max_input_chars: int = 600
+    # False hides routing/isochrone/network tools, for hosts without the street data.
+    enable_routing: bool = True
 
 
 def load_settings() -> Settings:
@@ -49,6 +51,7 @@ def load_settings() -> Settings:
         maps_s3_bucket=os.environ.get("GEOAGENT_MAPS_S3_BUCKET") or None,
         max_session_messages=int(os.environ.get("GEOAGENT_MAX_SESSION_MESSAGES", "30")),
         max_input_chars=int(os.environ.get("GEOAGENT_MAX_INPUT_CHARS", "600")),
+        enable_routing=os.environ.get("GEOAGENT_ENABLE_ROUTING", "true").lower() != "false",
     )
 
 
