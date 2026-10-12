@@ -41,6 +41,9 @@ local-wa = [
 aws = [
     "boto3",
 ]
+hf = [
+    "huggingface_hub",
+]
 
 [project.scripts]
 geoagent = "geoagent.cli:main"

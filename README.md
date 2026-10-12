@@ -201,6 +201,29 @@ and `gradio_app.py` are four thin, swappable front ends over the same
   instances. (Each worker still holds its own in-memory street-network cache; see
   Performance and cost.)
 
+## Free hosting (Hugging Face Spaces)
+
+The same container runs for free on a Hugging Face Space (2 vCPU, 16 GB RAM), which is
+enough for the offline routing that free app hosts can't hold. The street data lives in a
+free public Hugging Face dataset and is downloaded when the container starts. The Space
+sleeps after a couple of days without visitors and takes about a minute to wake.
+
+```bash
+pip install -e ".[hf]"
+huggingface-cli login                       # a write token; never put it in a file
+
+# 1. Upload the street data once (needs `python -m geoagent.setup_local_wa` to have run)
+python scripts/upload_street_data_hf.py YOU/wa-street-data
+
+# 2. Publish the app (reads OPENAI_API_KEY from your environment, stores it as a Space secret)
+export OPENAI_API_KEY=sk-...
+python scripts/deploy_hf_space.py YOU/wa-mining-agent YOU/wa-street-data
+```
+
+The only cost is model usage, a fraction of a cent per question. Visitors are limited to
+20 questions per session by default, and you should also set a hard monthly limit in your
+OpenAI account.
+
 ## Deploying to AWS
 
 The dashboard ships as a container and the repo includes the infrastructure to run it on
@@ -450,7 +473,7 @@ pytest              # unit tests only (fast, no network calls; needs `.[dev,api]
 pytest -m integration  # also hits real OSM/Overpass data
 ```
 
-The unit suite (71 tests, run on every push by GitHub Actions) mocks the OpenAI client and
+The unit suite (73 tests, run on every push by GitHub Actions) mocks the OpenAI client and
 all external services, so it runs offline in a few seconds. Several tests are regression
 tests for failures found in real use (for example drive isochrones breaking where OSM has
 no speed limits, a route destination stranded in a disconnected piece of the map, and
@@ -467,7 +490,7 @@ src/geoagent/
 ├── dashboard.py           # Streamlit chat + live map entrypoint
 ├── gradio_app.py          # Gradio chat + live map entrypoint
 ├── setup_local_wa.py      # one-time WA offline-extract setup script
-├── cloud.py               # optional S3 data sync + map publishing (hosting)
+├── cloud.py               # optional data sync (S3 or Hugging Face) + map publishing (hosting)
 ├── limits.py              # per-visitor message limits for public deployments
 ├── agent/
 │   ├── loop.py            # OpenAI tool-calling loop
@@ -490,7 +513,8 @@ src/geoagent/
     └── models.py           # result dataclasses + their model-facing text/GeoJSON summaries
 ```
 
-Outside `src/`: `Dockerfile` and `docker/` (container image), `infra/` (Terraform for AWS),
+Outside `src/`: `Dockerfile` and `docker/` (container image), `huggingface/` and `scripts/`
+(free hosting and example-map tooling), `infra/` (Terraform for AWS),
 `.github/workflows/` (CI and a manual deploy workflow), `tests/` (unit and integration suites), `assets/` (README screenshots and
 example maps) and `scripts/generate_readme_maps.py` (regenerates the example maps from the
 live tools).

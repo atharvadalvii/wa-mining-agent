@@ -1,8 +1,10 @@
-# Container image for the Streamlit dashboard (e.g. on ECS Fargate).
+# Container image for the Streamlit dashboard: runs on Hugging Face Spaces (free) or
+# AWS ECS Fargate.
 #
-# The offline WA street network (~750 MB of tables plus a 109 MB .pbf) is NOT baked into
-# the image: the entrypoint downloads it from S3 at startup (GEOAGENT_DATA_S3_URI), which
-# keeps the image small and lets the data be updated without a rebuild.
+# The offline WA street network (~600 MB of tables plus a 109 MB .pbf) is NOT baked into
+# the image. The entrypoint downloads it at startup, from a Hugging Face dataset
+# (GEOAGENT_DATA_HF_REPO) or an S3 prefix (GEOAGENT_DATA_S3_URI). That keeps the image
+# small and lets the data change without a rebuild.
 FROM python:3.10-slim
 
 ENV PYTHONUNBUFFERED=1 \
@@ -16,7 +18,7 @@ RUN apt-get update \
 WORKDIR /app
 COPY pyproject.toml README.md ./
 COPY src ./src
-RUN pip install -e ".[dashboard,local-wa,aws]"
+RUN pip install -e ".[dashboard,local-wa,aws,hf]"
 
 COPY docker/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh \

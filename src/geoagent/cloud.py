@@ -1,15 +1,18 @@
-"""Optional AWS (S3) integration for hosting the app.
+"""Optional hosting integration: where a container gets its offline street data, and
+where it publishes map exports. Supports AWS S3 and (free) Hugging Face datasets.
 
 Everything here is off unless configured, so local use is unaffected:
 
-- GEOAGENT_DATA_S3_URI: the offline WA street network is far too big for the repo or a
-  container image, so a container downloads it from S3 at startup instead.
+- GEOAGENT_DATA_S3_URI or GEOAGENT_DATA_HF_REPO: the offline WA street network is far
+  too big for the repo or a container image, so a container downloads it at startup
+  instead, from an S3 prefix or from a public Hugging Face dataset repo.
 - GEOAGENT_MAPS_S3_BUCKET: a hosted container's local disk is private to that one
   container, so a "map saved to /app/maps/..." path is useless to a visitor. Uploading
   each map and linking a presigned URL gives them something they can open.
 
-Requires boto3 (pip install -e ".[aws]"). Credentials come from the usual AWS chain
-(on ECS, the task role), never from this code or the repo.
+S3 needs boto3 (pip install -e ".[aws]") and credentials from the usual AWS chain (on
+ECS, the task role), never from this code or the repo. Hugging Face needs
+huggingface_hub (pip install -e ".[hf]"); a public dataset needs no token.
 
 Run `python -m geoagent.cloud sync` to download the data (the container entrypoint does).
 """
@@ -84,6 +87,51 @@ def sync_data_from_s3(
     return fetched
 
 
+def sync_data_from_hf(
+    repo_id: str,
+    dest: Path | None = None,
+    network_types: tuple[str, ...] = _DEFAULT_NETWORK_TYPES,
+    pbf_dest: Path | None = None,
+    api=None,
+    download=None,
+) -> list[str]:
+    """Same job as sync_data_from_s3, from a Hugging Face *dataset* repo laid out as
+    local_network/<type>_nodes.parquet (and _edges) and osm_extracts/*.osm.pbf."""
+    dest = dest if dest is not None else local_extract.CACHE_DIR
+    pbf_dest = pbf_dest if pbf_dest is not None else local_extract.DATA_DIR
+    if api is None:
+        from huggingface_hub import HfApi
+
+        api = HfApi()
+    if download is None:
+        from huggingface_hub import hf_hub_download
+
+        download = hf_hub_download
+
+    fetched: list[str] = []
+    for folder, target_dir, wanted in (
+        ("local_network", dest, lambda n: n.endswith(".parquet") and n.split("_", 1)[0] in network_types),
+        ("osm_extracts", pbf_dest, lambda n: n.endswith(".osm.pbf")),
+    ):
+        for entry in api.list_repo_tree(repo_id, path_in_repo=folder, repo_type="dataset"):
+            name = entry.path.rsplit("/", 1)[-1]
+            if not wanted(name):
+                continue
+            target = target_dir / name
+            if target.exists() and target.stat().st_size == entry.size:
+                continue
+            # hf_hub_download keeps the repo-relative path under local_dir, so pointing
+            # local_dir at the parent of target_dir lands the file in target_dir.
+            download(
+                repo_id=repo_id,
+                repo_type="dataset",
+                filename=entry.path,
+                local_dir=str(target_dir.parent),
+            )
+            fetched.append(name)
+    return fetched
+
+
 def publish_map(path: Path, bucket: str | None = None, client=None) -> str:
     """Uploads a saved map and returns a presigned URL for it. With no bucket
     configured (or if the upload fails) returns the local path, so a map export
@@ -109,17 +157,21 @@ def main(argv: list[str] | None = None) -> int:
     if args != ["sync"]:
         print("usage: python -m geoagent.cloud sync", file=sys.stderr)
         return 2
-    uri = os.environ.get("GEOAGENT_DATA_S3_URI")
-    if not uri:
-        print("GEOAGENT_DATA_S3_URI is not set; nothing to sync.")
-        return 0
     types = tuple(
         t.strip()
         for t in os.environ.get("GEOAGENT_DATA_NETWORK_TYPES", "").split(",")
         if t.strip()
     ) or _DEFAULT_NETWORK_TYPES
-    fetched = sync_data_from_s3(uri, network_types=types)
-    print(f"synced {len(fetched)} file(s) from {uri}: {', '.join(fetched) or 'already up to date'}")
+    uri = os.environ.get("GEOAGENT_DATA_S3_URI")
+    hf_repo = os.environ.get("GEOAGENT_DATA_HF_REPO")
+    if uri:
+        source, fetched = uri, sync_data_from_s3(uri, network_types=types)
+    elif hf_repo:
+        source, fetched = f"huggingface dataset {hf_repo}", sync_data_from_hf(hf_repo, network_types=types)
+    else:
+        print("Neither GEOAGENT_DATA_S3_URI nor GEOAGENT_DATA_HF_REPO is set; nothing to sync.")
+        return 0
+    print(f"synced {len(fetched)} file(s) from {source}: {', '.join(fetched) or 'already up to date'}")
     return 0
 
 

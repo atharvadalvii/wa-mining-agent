@@ -121,3 +121,78 @@ def test_publish_map_falls_back_to_the_path_if_the_upload_fails(tmp_path):
 
     f = tmp_path / "m.html"
     assert cloud.publish_map(f, bucket="b", client=Broken()) == str(f)
+
+
+class FakeHfEntry:
+    def __init__(self, path, size):
+        self.path, self.size = path, size
+
+
+class FakeHfApi:
+    def __init__(self, files: dict[str, bytes]):
+        self.files = files
+
+    def list_repo_tree(self, repo_id, path_in_repo, repo_type):
+        assert repo_type == "dataset"
+        return [
+            FakeHfEntry(p, len(b)) for p, b in self.files.items() if p.startswith(path_in_repo + "/")
+        ]
+
+
+def _hf_files():
+    return {
+        "local_network/drive_nodes.parquet": b"aaaa",
+        "local_network/drive_edges.parquet": b"bb",
+        "local_network/bike_nodes.parquet": b"dddddddd",
+        "local_network/README.md": b"dataset card",
+        "osm_extracts/western-australia-latest.osm.pbf": b"pbfpbf",
+    }
+
+
+def _fake_download(files, calls):
+    def download(repo_id, repo_type, filename, local_dir):
+        calls.append(filename)
+        out = Path(local_dir) / filename  # hf_hub_download keeps the repo-relative path
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_bytes(files[filename])
+
+    return download
+
+
+def test_hf_sync_lands_files_in_the_expected_directories(tmp_path):
+    files, calls = _hf_files(), []
+    tables, pbf = tmp_path / "cache" / "local_network", tmp_path / "data" / "osm_extracts"
+    fetched = cloud.sync_data_from_hf(
+        "someone/wa-street-data",
+        dest=tables,
+        pbf_dest=pbf,
+        network_types=("drive",),
+        api=FakeHfApi(files),
+        download=_fake_download(files, calls),
+    )
+    assert sorted(fetched) == [
+        "drive_edges.parquet",
+        "drive_nodes.parquet",
+        "western-australia-latest.osm.pbf",
+    ]
+    assert (tables / "drive_nodes.parquet").read_bytes() == b"aaaa"
+    assert (pbf / "western-australia-latest.osm.pbf").read_bytes() == b"pbfpbf"
+    assert not (tables / "bike_nodes.parquet").exists()
+    assert not (tables / "README.md").exists()
+
+
+def test_hf_sync_skips_files_already_present_at_the_same_size(tmp_path):
+    files, calls = _hf_files(), []
+    tables, pbf = tmp_path / "cache" / "local_network", tmp_path / "data" / "osm_extracts"
+    tables.mkdir(parents=True)
+    (tables / "drive_nodes.parquet").write_bytes(b"aaaa")
+    fetched = cloud.sync_data_from_hf(
+        "someone/wa-street-data",
+        dest=tables,
+        pbf_dest=pbf,
+        network_types=("drive",),
+        api=FakeHfApi(files),
+        download=_fake_download(files, calls),
+    )
+    assert "drive_nodes.parquet" not in fetched
+    assert "local_network/drive_nodes.parquet" not in calls
