@@ -201,6 +201,74 @@ and `gradio_app.py` are four thin, swappable front ends over the same
   instances. (Each worker still holds its own in-memory street-network cache; see
   Performance and cost.)
 
+## Deploying to AWS
+
+The dashboard ships as a container and the repo includes the infrastructure to run it on
+AWS (ECS Fargate behind an Application Load Balancer), defined in Terraform under
+[`infra/`](infra/):
+
+```mermaid
+flowchart LR
+    V["Visitor"] --> ALB["Application Load Balancer"]
+    ALB --> ECS["ECS Fargate task<br/>Streamlit app container"]
+    ECS -->|"download street data at startup"| S3D[("S3: street data<br/>tables + .pbf")]
+    ECS -->|"publish map exports"| S3M[("S3: maps<br/>presigned links")]
+    ECS -->|"OPENAI_API_KEY"| SM["Secrets Manager"]
+    ECS -->|"logs"| CW["CloudWatch Logs"]
+    GH["GitHub Actions<br/>(manual deploy, OIDC)"] -->|"push image"| ECR["ECR"]
+    ECR --> ECS
+```
+
+Design choices:
+
+- **Street data is not in the image.** The offline WA network is ~750 MB of tables plus a
+  109 MB `.pbf`, so the container downloads it from S3 at startup (`python -m
+  geoagent.cloud sync`). The image stays small and the data can change without a rebuild.
+- **Sized from a measurement, not a guess.** A container with only the driving data
+  loaded used ~2.9 GiB, so the task gets 8 GiB (1 vCPU) to leave room for walking data
+  and large isochrone graphs.
+- **No stored cloud keys.** The OpenAI key lives in Secrets Manager and is injected into
+  the task; the deploy workflow gets short-lived credentials through GitHub OIDC, limited
+  to this repo's `main` branch; the task role can only read the data bucket and write
+  map files.
+- **Spend is capped in three places.** Per-visitor limits in the app
+  (`GEOAGENT_MAX_SESSION_MESSAGES`, `GEOAGENT_MAX_INPUT_CHARS`), a monthly AWS budget
+  with email alerts, and a service that starts at zero tasks and is only turned on
+  deliberately.
+- **Account guard.** The Terraform provider is pinned to one AWS account ID and refuses
+  to run against any other.
+- **No NAT gateway** (the tasks use public IPs but accept traffic only from the load
+  balancer), which avoids a ~$35/month fixed cost. The listener is HTTP only because
+  HTTPS needs a domain and certificate.
+
+Steps (about 15 minutes plus the data upload):
+
+```bash
+# 1. Infrastructure (service starts with 0 tasks)
+cd infra
+terraform init
+terraform apply -var alert_email=you@example.com -var aws_profile=YOUR_PROFILE
+
+# 2. Upload the street data (from a machine where `python -m geoagent.setup_local_wa` has run)
+aws s3 sync .cache/local_network s3://$(terraform output -raw data_bucket)/data/local_network \
+    --exclude "bike_*"
+aws s3 cp data/osm_extracts/western-australia-latest.osm.pbf \
+    s3://$(terraform output -raw data_bucket)/data/osm_extracts/
+
+# 3. Store the OpenAI key (never put it in a file or the repo)
+aws secretsmanager put-secret-value --secret-id $(terraform output -raw openai_secret_arn) \
+    --secret-string "sk-..."
+
+# 4. Push the image (or run the "Deploy to AWS" workflow after setting the
+#    AWS_DEPLOY_ROLE_ARN repo secret to `terraform output github_deploy_role_arn`)
+# 5. Start it
+terraform apply -var alert_email=you@example.com -var desired_count=1
+terraform output app_url
+```
+
+Stop paying for compute any time with `-var desired_count=0`, and remove everything
+with `terraform destroy`.
+
 ## Requirements
 
 - Python 3.10+
@@ -382,7 +450,7 @@ pytest              # unit tests only (fast, no network calls; needs `.[dev,api]
 pytest -m integration  # also hits real OSM/Overpass data
 ```
 
-The unit suite (58 tests, run on every push by GitHub Actions) mocks the OpenAI client and
+The unit suite (71 tests, run on every push by GitHub Actions) mocks the OpenAI client and
 all external services, so it runs offline in a few seconds. Several tests are regression
 tests for failures found in real use (for example drive isochrones breaking where OSM has
 no speed limits, a route destination stranded in a disconnected piece of the map, and
@@ -399,6 +467,8 @@ src/geoagent/
 ├── dashboard.py           # Streamlit chat + live map entrypoint
 ├── gradio_app.py          # Gradio chat + live map entrypoint
 ├── setup_local_wa.py      # one-time WA offline-extract setup script
+├── cloud.py               # optional S3 data sync + map publishing (hosting)
+├── limits.py              # per-visitor message limits for public deployments
 ├── agent/
 │   ├── loop.py            # OpenAI tool-calling loop
 │   ├── conversation.py    # message history state
@@ -420,7 +490,8 @@ src/geoagent/
     └── models.py           # result dataclasses + their model-facing text/GeoJSON summaries
 ```
 
-Outside `src/`: `tests/` (unit and integration suites), `assets/` (README screenshots and
+Outside `src/`: `Dockerfile` and `docker/` (container image), `infra/` (Terraform for AWS),
+`.github/workflows/` (CI and a manual deploy workflow), `tests/` (unit and integration suites), `assets/` (README screenshots and
 example maps) and `scripts/generate_readme_maps.py` (regenerates the example maps from the
 live tools).
 
