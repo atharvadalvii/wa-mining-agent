@@ -19,6 +19,7 @@ from geoagent.agent.conversation import Conversation
 from geoagent.agent.loop import run_turn
 from geoagent.agent.prompts import SYSTEM_PROMPT
 from geoagent.config import configure_osmnx, load_settings
+from geoagent.limits import check_message
 from geoagent.geospatial import local_extract
 from geoagent.geospatial.mapping import configure_maps_dir
 from geoagent.tools.geo_context import collect_geo_features
@@ -85,7 +86,19 @@ with st.sidebar:
                 st.write(message["content"])
 
     prompt = st.chat_input("Ask about WA mines, tenements, routes, or drive-time areas...")
-    if prompt:
+    questions_asked = sum(
+        1 for m in st.session_state.conversation.messages if m.get("role") == "user"
+    )
+    refusal = (
+        check_message(
+            questions_asked, prompt, settings.max_session_messages, settings.max_input_chars
+        )
+        if prompt
+        else None
+    )
+    if refusal:
+        st.warning(refusal)
+    elif prompt:
         checkpoint = len(st.session_state.conversation.messages)
         st.session_state.conversation.add_user(prompt)
         try:

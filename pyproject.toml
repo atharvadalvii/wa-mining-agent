@@ -38,6 +38,9 @@ gradio = [
 local-wa = [
     "pyrosm",
 ]
+aws = [
+    "boto3",
+]
 
 [project.scripts]
 geoagent = "geoagent.cli:main"

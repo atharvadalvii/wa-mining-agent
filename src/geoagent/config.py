@@ -18,6 +18,12 @@ class Settings:
     max_agent_turns: int
     overpass_url: str | None
     overpass_rate_limit: bool
+    # Optional hosting settings (all off by default; see geoagent/cloud.py).
+    data_s3_uri: str | None = None  # e.g. s3://bucket/local_network, synced at startup
+    maps_s3_bucket: str | None = None  # publish map exports here, link via presigned URL
+    # Per-visitor limits for a public deployment (0 disables the limit).
+    max_session_messages: int = 30
+    max_input_chars: int = 600
 
 
 def load_settings() -> Settings:
@@ -39,6 +45,10 @@ def load_settings() -> Settings:
         overpass_url=os.environ.get("GEOAGENT_OVERPASS_URL") or None,
         overpass_rate_limit=os.environ.get("GEOAGENT_OVERPASS_RATE_LIMIT", "true").lower()
         != "false",
+        data_s3_uri=os.environ.get("GEOAGENT_DATA_S3_URI") or None,
+        maps_s3_bucket=os.environ.get("GEOAGENT_MAPS_S3_BUCKET") or None,
+        max_session_messages=int(os.environ.get("GEOAGENT_MAX_SESSION_MESSAGES", "30")),
+        max_input_chars=int(os.environ.get("GEOAGENT_MAX_INPUT_CHARS", "600")),
     )
 
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from geoagent.cloud import publish_map
 from geoagent.geospatial.isochrone import compute_isochrone
 from geoagent.geospatial.mapping import save_isochrone_map, save_route_map
 from geoagent.geospatial.network import get_network_summary
@@ -18,9 +19,10 @@ def _with_map_export(text: str, save_map) -> str:
     """
     try:
         map_path = save_map()
+        location = publish_map(map_path)
     except Exception as exc:
         return f"{text} (map export failed: {exc})"
-    return f"{text} Map saved to {map_path}."
+    return f"{text} Map saved to {location}."
 
 
 def handle_get_street_network(
