@@ -26,7 +26,31 @@ from geoagent.tools.geo_context import collect_geo_features
 
 import geoagent.tools.wa_mining  # noqa: F401  (import for tool-registration side effects)
 
-st.set_page_config(page_title="geoagent", layout="wide")
+st.set_page_config(page_title="WA Mining Assistant", page_icon="⛏️", layout="wide")
+
+st.markdown(
+    """
+    <style>
+    #MainMenu, footer, [data-testid="stToolbar"] {visibility: hidden;}
+    .block-container {padding-top: 2rem; padding-bottom: 1.5rem; max-width: 1200px;}
+    .hero h1 {font-size: 2.6rem; font-weight: 700; margin: 0 0 .25rem; letter-spacing: -.02em;}
+    .hero p.tag {font-size: 1.25rem; color: #3d4350; margin: 0 0 .5rem;}
+    .hero p.sub {color: #6b7280; margin: 0 0 1.5rem; max-width: 46rem;}
+    .card {border: 1px solid #e7e2da; border-radius: 12px; padding: 1rem 1.1rem;
+           background: #faf8f5; height: 100%;}
+    .card b {display: block; margin-bottom: .25rem;}
+    .card span {color: #6b7280; font-size: .92rem;}
+    h3.section {font-size: .8rem; text-transform: uppercase; letter-spacing: .08em;
+                color: #8a8f98; margin: 1.75rem 0 .6rem; font-weight: 600;}
+    div.stButton > button {border-radius: 10px; text-align: left; padding: .6rem .8rem;}
+    [data-testid="stSidebar"] {border-right: 1px solid #e7e2da;}
+    .topbar {display: flex; align-items: baseline; gap: .75rem; margin-bottom: .5rem;}
+    .topbar h2 {margin: 0; font-size: 1.4rem;}
+    .topbar span {color: #6b7280; font-size: .9rem;}
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
 
 
 def _bridge_streamlit_secrets_to_env() -> None:
@@ -72,16 +96,15 @@ if "conversation" not in st.session_state:
 if "features" not in st.session_state:
     st.session_state.features = []
 
-st.title("geoagent")
-st.caption(
-    "Western Australian mining assistant: deposits, tenements, routes and reachable areas"
-    if settings.enable_routing
-    else "Western Australian mining assistant: mines, deposits and mining tenements"
-)
+_EXAMPLES = [
+    "Gold deposits near Kalgoorlie",
+    "Pending prospecting licences near Coolgardie",
+    "Iron ore mining leases near Newman",
+] + (["How far can a crew drive from Leonora in an hour?"] if settings.enable_routing else [])
 
 with st.sidebar:
-    st.header("Chat")
-    if st.button("Clear conversation"):
+    st.subheader("Chat")
+    if st.button("Clear conversation", use_container_width=True):
         st.session_state.conversation = Conversation.start(system_prompt(settings.enable_routing))
         st.session_state.features = []
         st.rerun()
@@ -91,7 +114,7 @@ with st.sidebar:
             with st.chat_message(message["role"]):
                 st.write(message["content"])
 
-    prompt = st.chat_input(
+    prompt = st.session_state.pop("pending_prompt", None) or st.chat_input(
         "Ask about WA mines, tenements, routes, or drive-time areas..."
         if settings.enable_routing
         else "Ask about WA mines, deposits or mining tenements..."
@@ -139,6 +162,56 @@ with st.sidebar:
             st.rerun()
 
 
+def _landing() -> None:
+    """Shown until the first question: say what this is and how to use it."""
+    st.markdown(
+        """
+        <div class="hero">
+          <h1>⛏️ WA Mining Assistant</h1>
+          <p class="tag">Ask about Western Australian mining in plain English and see the answer on a map.</p>
+          <p class="sub">An LLM agent that queries live government mining data, so you get real
+          tenement and deposit records instead of guesses.</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    st.markdown('<h3 class="section">Try a question</h3>', unsafe_allow_html=True)
+    for col, example in zip(st.columns(len(_EXAMPLES)), _EXAMPLES):
+        if col.button(example, use_container_width=True):
+            st.session_state.pending_prompt = example
+            st.rerun()
+    st.caption("Or type your own in the chat box on the left.")
+
+    st.markdown('<h3 class="section">What it does</h3>', unsafe_allow_html=True)
+    cards = [
+        ("Mines and deposits", "Filter by commodity and site type. Source: MINEDEX."),
+        ("Mining tenements", "Leases and licences by type and status, with boundaries on the map. Source: TENGRAPH."),
+    ]
+    if settings.enable_routing:
+        cards.append(("Travel planning", "Driving routes, and how far a crew can get in a given time."))
+    for col, (title, text) in zip(st.columns(len(cards)), cards):
+        col.markdown(
+            f'<div class="card"><b>{title}</b><span>{text}</span></div>', unsafe_allow_html=True
+        )
+
+    st.caption(
+        "Data: Western Australia DMIRS public ArcGIS services · OpenAI tool calling, "
+        "GeoPandas/OSMnx, Streamlit · [Source on GitHub](https://github.com/atharvadalvii/wa-mining-agent)"
+    )
+
+
+if not any(m.get("role") == "user" for m in st.session_state.conversation.messages):
+    _landing()
+    st.stop()
+
+st.markdown(
+    '<div class="topbar"><h2>⛏️ WA Mining Assistant</h2>'
+    "<span>Answers appear on the map. Chat on the left.</span></div>",
+    unsafe_allow_html=True,
+)
+
+
 def _style(feature: dict) -> dict:
     kind = feature["properties"].get("kind")
     if kind == "route":
@@ -168,4 +241,4 @@ if st.session_state.features:
 # is mid-answer makes Streamlit abandon the turn silently (the question stays on
 # screen with no reply and no error), so visitors who touch the map while waiting
 # lose their answer. Returning nothing means the map can't interrupt a turn.
-st_folium(m, width=None, height=650, returned_objects=[], key="map")
+st_folium(m, width=None, height=620, returned_objects=[], key="map")
