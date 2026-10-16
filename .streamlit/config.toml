@@ -1,10 +1,16 @@
-[theme]
-base = "light"
+# Light and dark themes; Streamlit follows the visitor's system setting and
+# also offers a switch in the app's Settings menu.
+[theme.light]
 primaryColor = "#b45309"
 backgroundColor = "#ffffff"
 secondaryBackgroundColor = "#f7f5f2"
 textColor = "#1f2328"
-font = "sans serif"
+
+[theme.dark]
+primaryColor = "#f59e0b"
+backgroundColor = "#14161a"
+secondaryBackgroundColor = "#1d2025"
+textColor = "#e8eaed"
 
 [server]
 headless = true

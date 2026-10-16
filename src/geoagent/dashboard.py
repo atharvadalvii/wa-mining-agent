@@ -31,22 +31,22 @@ st.set_page_config(page_title="WA Mining Assistant", page_icon="⛏️", layout=
 st.markdown(
     """
     <style>
-    #MainMenu, footer, [data-testid="stToolbar"] {visibility: hidden;}
+    footer {visibility: hidden;}
     .block-container {padding-top: 2rem; padding-bottom: 1.5rem; max-width: 1200px;}
     .hero h1 {font-size: 2.6rem; font-weight: 700; margin: 0 0 .25rem; letter-spacing: -.02em;}
-    .hero p.tag {font-size: 1.25rem; color: #3d4350; margin: 0 0 .5rem;}
-    .hero p.sub {color: #6b7280; margin: 0 0 1.5rem; max-width: 46rem;}
-    .card {border: 1px solid #e7e2da; border-radius: 12px; padding: 1rem 1.1rem;
-           background: #faf8f5; height: 100%;}
+    .hero p.tag {font-size: 1.25rem; opacity: .85; margin: 0 0 .5rem;}
+    .hero p.sub {opacity: .65; margin: 0 0 1.5rem; max-width: 46rem;}
+    .card {border: 1px solid rgba(128,128,128,.28); border-radius: 12px;
+           padding: 1rem 1.1rem; background: rgba(128,128,128,.08); height: 100%;}
     .card b {display: block; margin-bottom: .25rem;}
-    .card span {color: #6b7280; font-size: .92rem;}
+    .card span {opacity: .7; font-size: .92rem;}
     h3.section {font-size: .8rem; text-transform: uppercase; letter-spacing: .08em;
-                color: #8a8f98; margin: 1.75rem 0 .6rem; font-weight: 600;}
+                opacity: .55; margin: 1.75rem 0 .6rem; font-weight: 600;}
     div.stButton > button {border-radius: 10px; text-align: left; padding: .6rem .8rem;}
-    [data-testid="stSidebar"] {border-right: 1px solid #e7e2da;}
+    [data-testid="stSidebar"] {border-right: 1px solid rgba(128,128,128,.28);}
     .topbar {display: flex; align-items: baseline; gap: .75rem; margin-bottom: .5rem;}
     .topbar h2 {margin: 0; font-size: 1.4rem;}
-    .topbar span {color: #6b7280; font-size: .9rem;}
+    .topbar span {opacity: .65; font-size: .9rem;}
     </style>
     """,
     unsafe_allow_html=True,
